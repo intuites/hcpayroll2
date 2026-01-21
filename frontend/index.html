@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Candidate Entry</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="index.html">health — Staffing</a>
+        <nav class="main-nav">
+          <a href="index.html">Add Candidate</a>
+          <a href="staffer.html">Payroll</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card form-card" aria-labelledby="add-candidate">
+        <h1 id="add-candidate">Add Candidate</h1>
+
+        <form id="candidateForm" class="grid-form">
+          <div class="field">
+            <label for="candidate_name">Candidate Name</label>
+            <input
+              id="candidate_name"
+              name="candidate_name"
+              placeholder="Full name"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="start_date">Start Date</label>
+            <input id="start_date" type="date" name="start_date" required />
+          </div>
+
+          <div class="field">
+            <label for="end_date">End Date</label>
+            <input id="end_date" type="date" name="end_date" required />
+          </div>
+
+          <div class="field">
+            <label for="position">Position</label>
+            <input id="position" name="position" placeholder="e.g., nurse" />
+          </div>
+
+          <div class="field">
+            <label for="work_location">Work Location</label>
+            <input
+              id="work_location"
+              name="work_location"
+              placeholder="Site or Address"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client">Client</label>
+            <input id="client" name="client" placeholder="Client name" />
+          </div>
+
+          <div class="field">
+            <label for="shift">Shift</label>
+            <input id="shift" name="shift" placeholder="e.g., Day / Night" />
+          </div>
+
+          <div class="field">
+            <label for="hours">Hours</label>
+            <input
+              id="hours"
+              type="number"
+              name="hours"
+              placeholder="Hours per week"
+            />
+          </div>
+
+          <div class="field">
+            <label for="w2_rate">Regular Rate</label>
+            <input
+              id="w2_rate"
+              type="number"
+              step="0.01"
+              name="w2_rate"
+              placeholder="Hourly rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="ot_rate">OT Rate</label>
+            <input
+              id="ot_rate"
+              type="number"
+              step="0.01"
+              name="ot_rate"
+              placeholder="Overtime rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="holiday_rate">Holiday Rate</label>
+            <input
+              id="holiday_rate"
+              type="number"
+              step="0.01"
+              name="holiday_rate"
+              placeholder="Holiday rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="sign_bonus">Sign Bonus</label>
+            <input
+              id="sign_bonus"
+              type="number"
+              step="0.01"
+              name="sign_bonus"
+              placeholder="Optional"
+            />
+          </div>
+
+          <div class="field">
+            <label for="stipend_rate">Stipend Rate</label>
+            <input
+              id="stipend_rate"
+              type="number"
+              step="0.01"
+              name="stipend_rate"
+              placeholder="Stipend rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client_standard_bill_rate"
+              >Client Standard Bill Rate</label
+            >
+            <input
+              id="client_standard_bill_rate"
+              type="number"
+              step="0.01"
+              name="client_standard_bill_rate"
+              placeholder="Standard bill rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client_ot_bill_rate">Client OT Bill Rate</label>
+            <input
+              id="client_ot_bill_rate"
+              type="number"
+              step="0.01"
+              name="client_ot_bill_rate"
+              placeholder="OT bill rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client_holiday_bill_rate"
+              >Client Holiday Bill Rate</label
+            >
+            <input
+              id="client_holiday_bill_rate"
+              type="number"
+              step="0.01"
+              name="client_holiday_bill_rate"
+              placeholder="Holiday bill rate"
+            />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Add Candidate</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">© <span id="year"></span> health Staffing</div>
+    </footer>
+
+    <script>
+      document.getElementById("year").textContent = new Date().getFullYear();
+    </script>
+    <script type="module">
+      import { supabase } from "./supabase.js";
+
+      const API_URL = "http://localhost:5000/api";
+      const form = document.getElementById("candidateForm");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+
+        data.hours = data.hours ? parseInt(data.hours) : null;
+        data.w2_rate = data.w2_rate ? parseFloat(data.w2_rate) : null;
+        data.ot_rate = data.ot_rate ? parseFloat(data.ot_rate) : null;
+        data.holiday_rate = data.holiday_rate
+          ? parseFloat(data.holiday_rate)
+          : null;
+        data.sign_bonus = data.sign_bonus ? parseFloat(data.sign_bonus) : null;
+        data.stipend_rate = data.stipend_rate
+          ? parseFloat(data.stipend_rate)
+          : null;
+        data.client_standard_bill_rate = data.client_standard_bill_rate
+          ? parseFloat(data.client_standard_bill_rate)
+          : null;
+        data.client_ot_bill_rate = data.client_ot_bill_rate
+          ? parseFloat(data.client_ot_bill_rate)
+          : null;
+        data.client_holiday_bill_rate = data.client_holiday_bill_rate
+          ? parseFloat(data.client_holiday_bill_rate)
+          : null;
+
+        try {
+          const response = await fetch(`${API_URL}/candidates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || "Failed to add candidate");
+          }
+
+          alert("Candidate added successfully!");
+          form.reset();
+        } catch (error) {
+          console.error("Error:", error);
+          alert("Error: " + error.message);
+        }
+      });
+    </script>
+  </body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Candidate Entry</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="index.html">health — Staffing</a>
+        <nav class="main-nav">
+          <a href="index.html">Add Candidate</a>
+          <a href="staffer.html">Payroll</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card form-card" aria-labelledby="add-candidate">
+        <h1 id="add-candidate">Add Candidate</h1>
+
+        <form id="candidateForm" class="grid-form">
+          <div class="field">
+            <label for="candidate_name">Candidate Name</label>
+            <input
+              id="candidate_name"
+              name="candidate_name"
+              placeholder="Full name"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="start_date">Start Date</label>
+            <input id="start_date" type="date" name="start_date" required />
+          </div>
+
+          <div class="field">
+            <label for="end_date">End Date</label>
+            <input id="end_date" type="date" name="end_date" required />
+          </div>
+
+          <div class="field">
+            <label for="position">Position</label>
+            <input id="position" name="position" placeholder="e.g., nurse" />
+          </div>
+
+          <div class="field">
+            <label for="work_location">Work Location</label>
+            <input
+              id="work_location"
+              name="work_location"
+              placeholder="Site or Address"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client">Client</label>
+            <input id="client" name="client" placeholder="Client name" />
+          </div>
+
+          <div class="field">
+            <label for="shift">Shift</label>
+            <input id="shift" name="shift" placeholder="e.g., Day / Night" />
+          </div>
+
+          <div class="field">
+            <label for="hours">Hours</label>
+            <input
+              id="hours"
+              type="number"
+              name="hours"
+              placeholder="Hours per week"
+            />
+          </div>
+
+          <div class="field">
+            <label for="w2_rate">W2 Rate</label>
+            <input
+              id="w2_rate"
+              type="number"
+              step="0.01"
+              name="w2_rate"
+              placeholder="Hourly rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="ot_rate">OT Rate</label>
+            <input
+              id="ot_rate"
+              type="number"
+              step="0.01"
+              name="ot_rate"
+              placeholder="Overtime rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="holiday_rate">Holiday Rate</label>
+            <input
+              id="holiday_rate"
+              type="number"
+              step="0.01"
+              name="holiday_rate"
+              placeholder="Holiday rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="sign_bonus">Sign Bonus</label>
+            <input
+              id="sign_bonus"
+              type="number"
+              step="0.01"
+              name="sign_bonus"
+              placeholder="Optional"
+            />
+          </div>
+
+          <div class="field">
+            <label for="stipend_rate">Stipend Rate</label>
+            <input
+              id="stipend_rate"
+              type="number"
+              step="0.01"
+              name="stipend_rate"
+              placeholder="Stipend rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client_standard_bill_rate"
+              >Client Standard Bill Rate</label
+            >
+            <input
+              id="client_standard_bill_rate"
+              type="number"
+              step="0.01"
+              name="client_standard_bill_rate"
+              placeholder="Standard bill rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client_ot_bill_rate">Client OT Bill Rate</label>
+            <input
+              id="client_ot_bill_rate"
+              type="number"
+              step="0.01"
+              name="client_ot_bill_rate"
+              placeholder="OT bill rate"
+            />
+          </div>
+
+          <div class="field">
+            <label for="client_holiday_bill_rate"
+              >Client Holiday Bill Rate</label
+            >
+            <input
+              id="client_holiday_bill_rate"
+              type="number"
+              step="0.01"
+              name="client_holiday_bill_rate"
+              placeholder="Holiday bill rate"
+            />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Add Candidate</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">© <span id="year"></span> health Staffing</div>
+    </footer>
+
+    <script>
+      document.getElementById("year").textContent = new Date().getFullYear();
+    </script>
+    <script type="module">
+      import { supabase } from "./supabase.js";
+
+      const API_URL = "http://localhost:5000/api";
+      const form = document.getElementById("candidateForm");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+
+        data.hours = data.hours ? parseInt(data.hours) : null;
+        data.w2_rate = data.w2_rate ? parseFloat(data.w2_rate) : null;
+        data.ot_rate = data.ot_rate ? parseFloat(data.ot_rate) : null;
+        data.holiday_rate = data.holiday_rate
+          ? parseFloat(data.holiday_rate)
+          : null;
+        data.sign_bonus = data.sign_bonus ? parseFloat(data.sign_bonus) : null;
+        data.stipend_rate = data.stipend_rate
+          ? parseFloat(data.stipend_rate)
+          : null;
+        data.client_standard_bill_rate = data.client_standard_bill_rate
+          ? parseFloat(data.client_standard_bill_rate)
+          : null;
+        data.client_ot_bill_rate = data.client_ot_bill_rate
+          ? parseFloat(data.client_ot_bill_rate)
+          : null;
+        data.client_holiday_bill_rate = data.client_holiday_bill_rate
+          ? parseFloat(data.client_holiday_bill_rate)
+          : null;
+
+        try {
+          const response = await fetch(`${API_URL}/candidates`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || "Failed to add candidate");
+          }
+
+          alert("Candidate added successfully!");
+          form.reset();
+        } catch (error) {
+          console.error("Error:", error);
+          alert("Error: " + error.message);
+        }
+      });
+    </script>
+  </body>
+</html> -->

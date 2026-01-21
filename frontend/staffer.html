@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Payroll Generator</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="index.html">health — Staffing</a>
+        <nav class="main-nav">
+          <a href="index.html">Add Candidate</a>
+          <a href="staffer.html">Payroll</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- Generate Payroll Toggle -->
+      <button
+        id="togglePayroll"
+        class="btn primary-green"
+        style="margin-bottom: 16px; float: right; margin-top: 16px"
+      >
+        Generate Payroll
+      </button>
+      <section class="card" id="payrollCard">
+        <h1>Payroll Generator</h1>
+
+        <div class="filters">
+          <div class="field-inline">
+            <label for="fromDate">From</label>
+            <input type="date" id="fromDate" />
+          </div>
+          <div class="field-inline">
+            <label for="toDate">To</label>
+            <input type="date" id="toDate" />
+          </div>
+          <div class="form-actions">
+            <button id="generateBtn" type="button" class="btn primary">
+              Generate Payroll
+            </button>
+          </div>
+        </div>
+
+        <h2 class="mt-2">Select Candidates</h2>
+        <div id="candidateList" class="candidate-list"></div>
+      </section>
+    </main>
+
+    <!-- <footer class="site-footer">
+      <div class="container">© <span id="year"></span> health Staffing</div>
+    </footer> -->
+
+    <script>
+      document.getElementById("year").textContent = new Date().getFullYear();
+    </script>
+    <script type="module" src="app.js"></script>
+    <div id="payrollPreview"></div>
+    <div id="reportTotals"></div>
+  </body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Payroll Generator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html">health — Staffing</a>
+      <nav class="main-nav">
+        <a href="index.html">Add Candidate</a>
+        <a href="staffer.html">Payroll</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h1>Payroll Generator</h1>
+
+      <div class="filters">
+        <div class="field-inline">
+          <label for="fromDate">From</label>
+          <input type="date" id="fromDate" />
+        </div>
+        <div class="field-inline">
+          <label for="toDate">To</label>
+          <input type="date" id="toDate" />
+        </div>
+        <div class="form-actions">
+          <button
+  id="generateBtn"
+  type="button"
+  class="btn primary"
+>
+  Generate Payroll
+</button>
+        </div>
+      </div>
+
+      <h2 class="mt-2">Select Candidates</h2>
+      <div id="candidateList" class="candidate-list"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">© <span id="year"></span> health Staffing</div>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+  <script type="module" src="app.js"></script>
+<div id="payrollPreview"></div>
+</body>
+</html> -->

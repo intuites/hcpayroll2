@@ -1,5 +1,3 @@
-import candidatesApi from "../backend/api/candidates.js";
+import app from "../backend/server.js";
 
-export default function handler(req, res) {
-  return candidatesApi(req, res);
-}
+export default app;

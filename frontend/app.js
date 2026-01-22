@@ -456,8 +456,8 @@ async function pushToGSheet() {
   const to = formatDateMMDDYYYY(toDateInput.value);
 
   const filename = `Payroll_Period_${from}_to_${to}.xlsx`;
-
-  const res = await fetch(`${API_URL}/payroll/download`, {
+  
+  const res = await fetch(`${API_URL}/payroll/push-to-gsheet`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

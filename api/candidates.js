@@ -7,31 +7,18 @@ const supabase = createClient(
 
 export default async function handler(req, res) {
   try {
-    if (req.method === "GET") {
-      const { data, error } = await supabase
-        .from("candidates")
-        .select("*")
-        .order("id", { ascending: false });
+    const { data, error } = await supabase
+      .from("candidates")
+      .select("*");
 
-      if (error) throw error;
+    if (error) throw error;
 
-      return res.status(200).json(data);
-    }
-
-    if (req.method === "POST") {
-      const body = req.body;
-
-      const { data, error } = await supabase
-        .from("candidates")
-        .insert(body);
-
-      if (error) throw error;
-
-      return res.status(200).json({ success: true, data });
-    }
-
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(200).json(data);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message,
+      supabaseUrlExists: !!process.env.SUPABASE_URL,
+      supabaseKeyExists: !!process.env.SUPABASE_KEY
+    });
   }
 }

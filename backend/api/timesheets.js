@@ -1,6 +1,10 @@
-import express from "express";
+﻿import express from "express";
 import multer from "multer";
-import { PDFParse } from "pdf-parse";
+import { createRequire } from "module";
+import { supabase } from "../server/supabaseClient.js";
+
+const require = createRequire(import.meta.url);
+const { PDFParse } = require("pdf-parse");
 
 const router = express.Router();
 const upload = multer({
@@ -14,8 +18,8 @@ const OPENROUTER_MODEL = "anthropic/claude-3.5-haiku";
 const CSV_HEADERS = [
   "name",
   "area",
-  "week_ending",
-  "reg_hours",
+  "week_ending",                      
+  "reg_hours",                                                                                           
   "w2_rate",
   "ot_hours",
   "ot_rate",
@@ -47,6 +51,192 @@ function toNumber(value) {
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toIsoDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const slash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (slash) return `${slash[3]}-${slash[1]}-${slash[2]}`;
+  return "";
+}
+
+function addDaysIso(isoDate, days) {
+  const d = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function buildRowKey(name, startDate, endDate) {
+  return `${normalizeName(name)}|${startDate}|${endDate}`;
+}
+
+function normalizeCommaName(value) {
+  const raw = String(value || "");
+  if (!raw.includes(",")) return normalizeName(raw);
+  const parts = raw.split(",");
+  const last = (parts[0] || "").trim();
+  const first = (parts[1] || "").trim();
+  return normalizeName(`${first} ${last}`);
+}
+
+function buildNameKeys(value) {
+  const keys = new Set();
+  const normalized = normalizeName(value);
+  if (normalized) keys.add(normalized);
+
+  const commaNormalized = normalizeCommaName(value);
+  if (commaNormalized) keys.add(commaNormalized);
+
+  const parts = normalized.split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    keys.add(`${parts.slice(1).join(" ")} ${parts[0]}`.trim());
+    keys.add(`${parts[parts.length - 1]} ${parts.slice(0, -1).join(" ")}`.trim());
+  }
+
+  return Array.from(keys).filter(Boolean);
+}
+
+function isIsoDate(v) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+}
+
+function pad2(v) {
+  return String(v).padStart(2, "0");
+}
+
+function round2Nullable(value) {
+  const n = Number(value);
+  return Number.isFinite(n)
+    ? Math.round((n + Number.EPSILON) * 100) / 100
+    : 0;
+}
+
+function buildCandidateLookup(candidates) {
+  const byUuid = new Map();
+  const byNormalized = new Map();
+
+  (candidates || []).forEach((c) => {
+    if (c?.candidate_uuid) byUuid.set(c.candidate_uuid, c);
+
+    buildNameKeys(c?.candidate_name).forEach((key) => {
+      byNormalized.set(key, c);
+    });
+  });
+
+  return { byUuid, byNormalized };
+}
+
+function findCandidateBase(lookup, parsedRow) {
+  const rowUuid = String(parsedRow?.candidate_uuid || "").trim();
+  if (rowUuid && lookup.byUuid.has(rowUuid)) return lookup.byUuid.get(rowUuid);
+
+  for (const key of buildNameKeys(parsedRow?.candidate_name)) {
+    if (lookup.byNormalized.has(key)) return lookup.byNormalized.get(key);
+  }
+  return null;
+}
+
+function calcNetProfit(base, row) {
+  const n = (v) => {
+    const x = Number(v);
+    return Number.isNaN(x) ? 0 : x;
+  };
+  const round = (v) => Math.round((Number(v || 0) + Number.EPSILON) * 100) / 100;
+  const VMS_RATE = 0.06;
+
+  const reg = n(row?.reg_hours);
+  const ot = n(row?.ot_hours);
+  const hol = n(row?.holiday_hours);
+
+  const w2 = n(base?.w2_rate);
+  const stipend = n(base?.stipend_rate);
+  const otPayRate = n(base?.ot_rate);
+  const holidayPayRate = n(base?.holiday_rate || base?.ot_rate);
+
+  const standardW2Amount = reg * w2;
+  const otAmount = ot * otPayRate;
+  const holidayAmount = hol * holidayPayRate;
+  const standardStipendAmount = reg * stipend;
+
+  const clientStdRate = n(base?.client_standard_bill_rate ?? row?.reg_rate);
+  const clientOtRate = n(base?.client_ot_bill_rate ?? row?.ot_rate);
+  const clientHolRate = n(base?.client_holiday_bill_rate ?? row?.holiday_rate);
+
+  const clientStandardAmount = reg * clientStdRate * (1 - VMS_RATE);
+  const clientOtHolidayAmount =
+    ot * (clientOtRate - VMS_RATE * clientOtRate) +
+    hol * (clientHolRate - VMS_RATE * clientHolRate);
+  const totalReceived = clientStandardAmount + clientOtHolidayAmount;
+
+  const totalCandidateExpense =
+    (standardW2Amount + otAmount) * 1.2 + standardStipendAmount;
+  const netProfit = totalReceived - totalCandidateExpense;
+
+  return round(netProfit);
+}
+
+async function buildParsedNetProfitSummary(rows) {
+  const { data: candidates, error: candidatesError } = await supabase
+    .from("candidate_data")
+    .select(
+      "candidate_uuid,candidate_name,w2_rate,stipend_rate,ot_rate,holiday_rate,sign_bonus,client_standard_bill_rate,client_ot_bill_rate,client_holiday_bill_rate"
+    );
+  if (candidatesError) {
+    throw new Error(candidatesError.message);
+  }
+
+  const lookup = buildCandidateLookup(candidates || []);
+  const byCandidate = new Map();
+
+  (rows || []).forEach((row) => {
+    const base = findCandidateBase(lookup, row);
+    const candidateUuid = base?.candidate_uuid || row?.candidate_uuid || null;
+    const candidateName =
+      base?.candidate_name || String(row?.candidate_name || "").trim();
+    const key = candidateUuid || `name:${normalizeName(candidateName)}`;
+    const profit = calcNetProfit(base || {}, row);
+
+    const prev = byCandidate.get(key) || {
+      candidate_uuid: candidateUuid,
+      candidate_name: candidateName,
+      net_profit: 0,
+    };
+    prev.net_profit += Number(profit || 0);
+    byCandidate.set(key, prev);
+  });
+
+  const reportRows = Array.from(byCandidate.values())
+    .map((r) => ({
+      ...r,
+      net_profit: round2Nullable(r.net_profit),
+    }))
+    .sort((a, b) =>
+      String(a.candidate_name).localeCompare(String(b.candidate_name))
+    );
+
+  const totalNetProfit = round2Nullable(
+    reportRows.reduce((sum, r) => sum + Number(r.net_profit || 0), 0)
+  );
+
+  return {
+    rows: reportRows,
+    candidate_count: reportRows.length,
+    total_net_profit: totalNetProfit,
+  };
 }
 
 function escapeCsvCell(value) {
@@ -108,7 +298,7 @@ function parseRowsFromRawText(rawText) {
   const rows = [];
   // Stable anchor across page breaks: totals line always carries final reg/ot per registrant.
   const totalsRegex =
-    /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\r?\nTotals for \(Registrant\):\s*([^\n\r]+)/g;
+    /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Totals for \(Registrant\):\s*([A-Za-z][A-Za-z.'\- ]*,\s*[A-Za-z][A-Za-z.'\- ]*?)(?=\s+-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?)/g;
 
   let totalsMatch;
   let previousTotalsEnd = 0;
@@ -164,7 +354,7 @@ function parseRowsFromRawText(rawText) {
         }
       }
       return Number(bestValue) || 0;
-    };
+    }; 
 
     const w2_rate = chooseMostFrequent(regularRates);
     const ot_rate = chooseMostFrequent(otRates);
@@ -172,15 +362,25 @@ function parseRowsFromRawText(rawText) {
 
     // If some shifts are paid at a higher REG rate (e.g. holiday premium),
     // split those hours into holiday_hours and keep base rate as w2_rate.
-    const detailRegex =
-      /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)\s+OT:\s*(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)\s+DBL:\s*(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)/g;
     const detailRows = [];
+    const regRatePairRegex = /Reg:\s*(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)/g;
     let detailMatch;
-    while ((detailMatch = detailRegex.exec(block)) !== null) {
-      const rowRegHours = toNumber(detailMatch[2]);
-      const rowRegRate = toNumber(detailMatch[3]);
+    while ((detailMatch = regRatePairRegex.exec(block)) !== null) {
+      const rowRegHours = toNumber(detailMatch[1]);
+      const rowRegRate = toNumber(detailMatch[2]);
       if (rowRegHours > 0 && rowRegRate > 0) {
         detailRows.push({ reg_hours: rowRegHours, reg_rate: rowRegRate });
+      }
+    }
+    if (!detailRows.length) {
+      const fallbackDetailRegex =
+        /(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)\s+OT:\s*(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)\s+DBL:\s*(-?\d+(?:\.\d+)?)\s+Rate:\s*([\d.]+)/g;
+      while ((detailMatch = fallbackDetailRegex.exec(block)) !== null) {
+        const rowRegHours = toNumber(detailMatch[2]);
+        const rowRegRate = toNumber(detailMatch[3]);
+        if (rowRegHours > 0 && rowRegRate > 0) {
+          detailRows.push({ reg_hours: rowRegHours, reg_rate: rowRegRate });
+        }
       }
     }
 
@@ -240,7 +440,7 @@ async function parseWithOpenRouter(rawText) {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`, 
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -368,4 +568,228 @@ router.post("/parse", upload.array("files", 10), async (req, res) => {
   }
 });
 
+router.post("/save-parsed", async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) {
+      return res.status(400).json({ error: "rows are required" });
+    }
+
+    const tableName = String(req.body?.table_name || "parsed_timesheet_rows").trim();
+
+    const { data: candidates, error: candidatesError } = await supabase
+      .from("candidate_data")
+      .select("candidate_uuid, candidate_name");
+    if (candidatesError) {
+      return res.status(500).json({ error: candidatesError.message });
+    }
+
+    const candidateLookup = new Map();
+    (candidates || []).forEach((c) => {
+      const key = normalizeName(c?.candidate_name);
+      if (key) candidateLookup.set(key, c.candidate_uuid);
+    });
+
+    const payload = rows
+      .map((row) => {
+        const name = String(row?.name || "").trim();
+        const endDate = toIsoDate(row?.end_date || row?.week_ending);
+        const startDate = toIsoDate(row?.start_date) || (endDate ? addDaysIso(endDate, -6) : "");
+        const candidateUuid = candidateLookup.get(normalizeName(name)) || null;
+
+        if (!name || !startDate || !endDate) return null;
+
+        return {
+          candidate_uuid: candidateUuid,
+          candidate_name: name,
+          start_date: startDate,
+          end_date: endDate,
+          reg_hours: toNumber(row?.reg_hours),
+          ot_hours: toNumber(row?.ot_hours),
+          holiday_hours: toNumber(row?.holiday_hours),
+          reg_rate: toNumber(row?.w2_rate ?? row?.reg_rate),
+          ot_rate: toNumber(row?.ot_rate),
+          holiday_rate: toNumber(row?.holiday_rate),
+        };
+      })
+      .filter(Boolean);
+
+    if (!payload.length) {
+      return res.status(400).json({
+        error: "No valid rows to save. Ensure each row has name, start_date, end_date",
+      });
+    }
+
+    // Deduplicate within request first
+    const dedupedMap = new Map();
+    payload.forEach((row) => {
+      dedupedMap.set(
+        buildRowKey(row.candidate_name, row.start_date, row.end_date),
+        row
+      );
+    });
+    const dedupedPayload = Array.from(dedupedMap.values());
+    const uniqueStartDates = [...new Set(dedupedPayload.map((r) => r.start_date))];
+    const uniqueEndDates = [...new Set(dedupedPayload.map((r) => r.end_date))];
+
+    // Skip rows that already exist in DB
+    const { data: existingRows, error: existingError } = await supabase
+      .from(tableName)
+      .select("candidate_name,start_date,end_date")
+      .in("start_date", uniqueStartDates)
+      .in("end_date", uniqueEndDates);
+
+    if (existingError) {
+      return res.status(400).json({ error: existingError.message });
+    }
+
+    const existingKeys = new Set(
+      (existingRows || []).map((r) =>
+        buildRowKey(r?.candidate_name, r?.start_date, r?.end_date)
+      )
+    );
+
+    const rowsToInsert = dedupedPayload.filter(
+      (r) => !existingKeys.has(buildRowKey(r.candidate_name, r.start_date, r.end_date))
+    );
+
+    if (!rowsToInsert.length) {
+      return res.json({
+        success: true,
+        inserted_count: 0,
+        skipped_duplicates: payload.length,
+        table: tableName,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from(tableName)
+      .insert(rowsToInsert)
+      .select("id");
+
+    if (error) {
+      const msg = String(error.message || "");
+      if (msg.toLowerCase().includes("row-level security")) {
+        return res.status(400).json({
+          error:
+            "RLS blocked insert on parsed_timesheet_rows. Fix SUPABASE_SERVICE_ROLE_KEY or add an INSERT policy.",
+        });
+      }
+      return res.status(400).json({ error: msg });
+    }
+
+    return res.json({
+      success: true,
+      inserted_count: data?.length || rowsToInsert.length,
+      skipped_duplicates: payload.length - rowsToInsert.length,
+      table: tableName,
+    });
+  } catch (err) {
+    console.error("SAVE PARSED ERROR:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/reports/weekly-net-profit", async (req, res) => {
+  try {
+    const weekEnding = String(req.query?.week_ending || "").trim();
+    if (!isIsoDate(weekEnding)) {
+      return res
+        .status(400)
+        .json({ error: "week_ending is required in YYYY-MM-DD format" });
+    }
+
+    const { data: rows, error } = await supabase
+      .from("parsed_timesheet_rows")
+      .select("*")
+      .eq("end_date", weekEnding);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const summary = await buildParsedNetProfitSummary(rows || []);
+
+    return res.json({
+      report: "weekly_net_profit",
+      week_ending: weekEnding,
+      candidate_count: summary.candidate_count,
+      rows: summary.rows,
+      total_net_profit: summary.total_net_profit,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/reports/net-profit", async (req, res) => {
+  try {
+    const mode = String(req.query?.mode || "range").toLowerCase();
+    let fromDate = "";
+    let toDate = "";
+    let periodLabel = "";
+
+    if (mode === "monthly") {
+      const month = Number(req.query?.month);
+      const year = Number(req.query?.year);
+      if (!Number.isInteger(month) || month < 1 || month > 12) {
+        return res.status(400).json({ error: "month must be 1-12" });
+      }
+      if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+        return res.status(400).json({ error: "year must be between 2000 and 2100" });
+      }
+
+      const from = new Date(Date.UTC(year, month - 1, 1));
+      const to = new Date(Date.UTC(year, month, 0));
+      fromDate = `${from.getUTCFullYear()}-${pad2(from.getUTCMonth() + 1)}-${pad2(
+        from.getUTCDate()
+      )}`;
+      toDate = `${to.getUTCFullYear()}-${pad2(to.getUTCMonth() + 1)}-${pad2(
+        to.getUTCDate()
+      )}`;
+      periodLabel = `${year}-${pad2(month)}`;
+    } else if (mode === "range") {
+      fromDate = String(req.query?.from_date || "");
+      toDate = String(req.query?.to_date || "");
+      if (!isIsoDate(fromDate) || !isIsoDate(toDate)) {
+        return res.status(400).json({
+          error: "from_date and to_date are required in YYYY-MM-DD format",
+        });
+      }
+      if (fromDate > toDate) {
+        return res.status(400).json({ error: "from_date cannot be after to_date" });
+      }
+      periodLabel = `${fromDate} to ${toDate}`;
+    } else {
+      return res.status(400).json({ error: "mode must be either 'range' or 'monthly'" });
+    }
+
+    const { data: rows, error } = await supabase
+      .from("parsed_timesheet_rows")
+      .select("*")
+      .gte("end_date", fromDate)
+      .lte("end_date", toDate)
+      .order("end_date", { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const summary = await buildParsedNetProfitSummary(rows || []);
+
+    return res.json({
+      report: mode === "monthly" ? "monthly_net_profit" : "period_net_profit",
+      mode,
+      from_date: fromDate,
+      to_date: toDate,
+      period_label: periodLabel,
+      candidate_count: summary.candidate_count,
+      rows: summary.rows,
+      total_net_profit: summary.total_net_profit,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
+
+
+
+

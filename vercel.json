@@ -1,3 +1,21 @@
 {
-  "version": 2
+  "version": 2,
+  "crons": [
+    {
+      "path": "/api/telegram/webhook?ensure_webhook=1",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/staffer.html",
+      "destination": "/frontend/index.html",
+      "permanent": false
+    },
+    {
+      "source": "/frontend/staffer.html",
+      "destination": "/frontend/index.html",
+      "permanent": false
+    }
+  ]
 }

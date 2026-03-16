@@ -1,4 +1,10 @@
-const API_URL = window.location.origin + "/api";
+const isLocalHost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+const PROD_API_URL = "https://hcpayrollmai.vercel.app/api";
+const API_URL = isLocalHost
+  ? "http://localhost:5000/api"
+  : PROD_API_URL;
 const candidateList = document.getElementById("candidateList");
 const generateBtn = document.getElementById("generateBtn");
 const fromDateInput = document.getElementById("fromDate");
@@ -10,12 +16,40 @@ const payrollCard = document.getElementById("payrollCard");
 
 let payrollRows = [];
 let previewTimer = null;
+let savedPayrollSignature = null;
+let isSavingPayroll = false;
 
 /* ================= UTIL ================= */
 function parseNumberOrNull(v) {
   if (v === "" || v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isNaN(n) ? null : n;
+}
+
+function roundTo2(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function withDerivedFinancials(row) {
+  const existingExpense = parseNumberOrNull(row?.total_candidate_expense);
+  const stdW2 = Number(row?.standard_w2_amount || 0);
+  const otAmt = Number(row?.ot_amount || 0);
+  const stipendAmt = Number(row?.standard_stipend_amount || 0);
+  const candidateExpense =
+    existingExpense !== null
+      ? existingExpense
+      : (stdW2 + otAmt) * 1.2 + stipendAmt;
+
+  const existingNet = parseNumberOrNull(row?.net_profit);
+  const totalReceived = Number(row?.total_amount_received_from_client || 0);
+  const netProfit =
+    existingNet !== null ? existingNet : totalReceived - candidateExpense;
+
+  return {
+    ...row,
+    total_candidate_expense: roundTo2(candidateExpense),
+    net_profit: roundTo2(netProfit),
+  };
 }
 
 /* ================= EDITABLE FIELDS ================= */
@@ -32,6 +66,7 @@ const EDITABLE_FIELDS = [
   "sign_bonus",
 
   "client_standard_bill_rate",
+  "vms_charges",
   "client_ot_bill_rate",
   "client_holiday_bill_rate",
 
@@ -55,6 +90,30 @@ function formatDateMMDDYYYY(dateStr) {
   const yyyy = d.getFullYear();
 
   return `${mm}-${dd}-${yyyy}`;
+}
+
+function getPayrollSaveSignature() {
+  return JSON.stringify({
+    from_date: fromDateInput.value || "",
+    to_date: toDateInput.value || "",
+    rows: payrollRows,
+  });
+}
+
+function updateSaveButtonState() {
+  const saveBtn = document.getElementById("saveBtn");
+  if (!saveBtn) return;
+
+  const hasRows = Array.isArray(payrollRows) && payrollRows.length > 0;
+  const isSaved =
+    hasRows && savedPayrollSignature === getPayrollSaveSignature();
+
+  saveBtn.disabled = !hasRows || isSavingPayroll || isSaved;
+  saveBtn.textContent = isSavingPayroll
+    ? "Saving..."
+    : isSaved
+    ? "Saved"
+    : "Save Payroll";
 }
 
 /* ================= Show / Hide Functionality ================= */
@@ -81,17 +140,11 @@ function updateGenerateState() {
 
 fromDateInput.addEventListener("change", updateGenerateState);
 toDateInput.addEventListener("change", updateGenerateState);
+fromDateInput.addEventListener("change", updateSaveButtonState);
+toDateInput.addEventListener("change", updateSaveButtonState);
 
 // initial load
 updateGenerateState();
-
-// function updateGenerateState() {
-//   generateBtn.disabled = !fromDateInput.value || !toDateInput.value;
-// }
-
-// fromDateInput.addEventListener("change", updateGenerateState);
-// toDateInput.addEventListener("change", updateGenerateState);
-// updateGenerateState();
 
 /* ================= LOAD CANDIDATES ================= */
 async function loadCandidates() {
@@ -194,7 +247,7 @@ generateBtn.addEventListener("click", async (e) => {
     return;
   }
 
-  payrollRows = data.rows;
+  payrollRows = (data.rows || []).map(withDerivedFinancials);
   renderPayrollTable();
 });
 
@@ -227,7 +280,7 @@ function renderPayrollTable() {
     ["missed_payment_amount", "MISSED AMT"],
     ["missed_payment_type", "MISSED TYPE"],
 
-    ["total_candidate_expense", "CANDIDATE EXP"],
+    ["total_candidate_expense", "CANDIDATE COST"],
 
     ["client_standard_bill_rate", "CLIENT STD"],
     ["vms_charges", "VMS"],
@@ -307,6 +360,7 @@ function renderPayrollTable() {
 
   document.getElementById("saveBtn").onclick = savePayroll;
   document.getElementById("pushBtn").onclick = pushToGSheet;
+  updateSaveButtonState();
 
   function calculateGrossReportTotals(rows) {
     const sum = (key) => rows.reduce((t, r) => t + Number(r[key] || 0), 0);
@@ -396,9 +450,12 @@ function renderMissedType(value) {
 /* ================= EDIT ================= */
 function onCellEdit(e) {
   const td = e.target;
-  payrollRows[td.dataset.row][td.dataset.key] = parseNumberOrNull(
-    td.textContent.trim()
-  );
+  const rowIndex = Number(td.dataset.row);
+  const key = td.dataset.key;
+  payrollRows[rowIndex][key] = parseNumberOrNull(td.textContent.trim());
+  if (key === "total_candidate_expense") {
+    payrollRows[rowIndex].use_manual_total_candidate_expense = true;
+  }
   debouncePreview();
 }
 
@@ -415,6 +472,13 @@ function debouncePreview() {
 }
 
 async function runPreview() {
+  const manualExpenseById = new Map(
+    payrollRows.map((r) => [
+      r.candidate_uuid,
+      r.use_manual_total_candidate_expense === true,
+    ])
+  );
+
   const res = await fetch(`${API_URL}/payroll/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -422,31 +486,66 @@ async function runPreview() {
       candidates: payrollRows.map((r) => ({
         id: r.candidate_uuid,
         ...Object.fromEntries(EDITABLE_FIELDS.map((f) => [f, r[f] ?? null])),
+        use_manual_total_candidate_expense:
+          r.use_manual_total_candidate_expense === true,
       })),
     }),
   });
 
   const data = await res.json();
   if (res.ok && Array.isArray(data.rows)) {
-    payrollRows = data.rows;
+    payrollRows = (data.rows || []).map((row) => ({
+      ...withDerivedFinancials(row),
+      use_manual_total_candidate_expense:
+        manualExpenseById.get(row.candidate_uuid) === true,
+    }));
     renderPayrollTable();
   }
 }
 
 /* ================= SAVE ================= */
 async function savePayroll() {
-  await fetch(`${API_URL}/payroll/save`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from_date: fromDateInput.value,
-      to_date: toDateInput.value,
-      payroll_name: formatPayrollName(fromDateInput.value, toDateInput.value),
-      rows: payrollRows,
-    }),
-  });
+  if (!payrollRows.length) {
+    alert("Generate payroll first");
+    return;
+  }
 
-  alert("Payroll saved successfully");
+  const currentSignature = getPayrollSaveSignature();
+  if (savedPayrollSignature === currentSignature) {
+    alert("This payroll is already saved to Supabase");
+    updateSaveButtonState();
+    return;
+  }
+
+  isSavingPayroll = true;
+  updateSaveButtonState();
+
+  try {
+    const res = await fetch(`${API_URL}/payroll/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from_date: fromDateInput.value,
+        to_date: toDateInput.value,
+        payroll_name: formatPayrollName(fromDateInput.value, toDateInput.value),
+        rows: payrollRows,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to save payroll");
+    }
+
+    savedPayrollSignature = currentSignature;
+    alert(data.updated ? "Payroll updated successfully" : "Payroll saved successfully");
+  } catch (err) {
+    alert(err.message || "Failed to save payroll");
+  } finally {
+    isSavingPayroll = false;
+    updateSaveButtonState();
+  }
 }
 
 /* ================= PUSH TO GSHEET ================= */

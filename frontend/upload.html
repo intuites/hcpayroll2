@@ -19,8 +19,8 @@
         <a class="brand" href="index.html">health - Staffing</a>
         <nav class="main-nav">
           <a href="index.html">Add Candidate</a>
-          <a href= "staffer.html">Payroll</a>
           <a href="upload.html" class="active">Upload</a>
+          <a href="reports.html">Reports</a>
         </nav>
       </div>
     </header>
@@ -47,6 +47,58 @@
 
         <div id="uploadStatus" style="margin-top: 14px; color: #475569"></div>
         <div id="parsedResults" style="margin-top: 16px"></div>
+
+        <section id="weeklyReportPanel" style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+          <h2 style="margin: 0 0 10px;">Net Profit Reports</h2>
+          <div class="filters" style="margin-bottom: 12px;">
+            <div class="field-inline">
+              <label for="reportMode">Report Type</label>
+              <select id="reportMode">
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="range">Custom Range</option>
+              </select>
+            </div>
+            <div class="field-inline" data-report-field="weekly">
+              <label for="reportWeekEnding">Week Ending</label>
+              <input id="reportWeekEnding" type="date" />
+            </div>
+            <div class="field-inline" data-report-field="monthly" style="display:none;">
+              <label for="reportMonth">Month</label>
+              <select id="reportMonth">
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+            <div class="field-inline" data-report-field="monthly" style="display:none;">
+              <label for="reportYear">Year</label>
+              <input id="reportYear" type="number" min="2000" max="2100" step="1" />
+            </div>
+            <div class="field-inline" data-report-field="range" style="display:none;">
+              <label for="reportFromDate">From Date</label>
+              <input id="reportFromDate" type="date" />
+            </div>
+            <div class="field-inline" data-report-field="range" style="display:none;">
+              <label for="reportToDate">To Date</label>
+              <input id="reportToDate" type="date" />
+            </div>
+            <button id="loadReportBtn" type="button" class="btn primary">
+              Run Report
+            </button>
+          </div>
+          <div id="weeklyReportStatus" style="margin-top: 10px; color: #475569"></div>
+          <div id="weeklyReportResults" style="margin-top: 12px"></div>
+        </section>
       </section>
     </main>
 
@@ -57,10 +109,25 @@
     <script>
       document.getElementById("year").textContent = new Date().getFullYear();
 
-      const API_URL = "http://localhost:5000/api";
+      const isLocalHost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+      const PROD_API_URL = "https://hcpayrollmai.vercel.app/api";
+      const API_URL = isLocalHost
+        ? "http://localhost:5000/api"
+        : PROD_API_URL;
       const uploadForm = document.getElementById("uploadForm");
       const statusEl = document.getElementById("uploadStatus");
       const resultsEl = document.getElementById("parsedResults");
+      const weeklyReportStatusEl = document.getElementById("weeklyReportStatus");
+      const weeklyReportResultsEl = document.getElementById("weeklyReportResults");
+      const reportModeSelect = document.getElementById("reportMode");
+      const reportWeekEndingInput = document.getElementById("reportWeekEnding");
+      const reportMonthInput = document.getElementById("reportMonth");
+      const reportYearInput = document.getElementById("reportYear");
+      const reportFromDateInput = document.getElementById("reportFromDate");
+      const reportToDateInput = document.getElementById("reportToDate");
+      const loadReportBtn = document.getElementById("loadReportBtn");
 
       const escapeHtml = (text) =>
         text
@@ -70,8 +137,8 @@
 
       const TABLE_HEADERS = [
         ["name", "Name", "text"],
-        ["area", "Area", "text"],
-        ["week_ending", "Week Ending", "text"],
+        ["start_date", "Start Date", "date"],
+        ["end_date", "End Date", "date"],
         ["reg_hours", "Reg Hours", "number"],
         ["w2_rate", "Reg Rate", "number"],
         ["ot_hours", "OT Hours", "number"],
@@ -81,31 +148,31 @@
       ];
       const PAYROLL_HEADERS = [
         ["candidate_name", "NAME"],
-        ["total_hours", "TOTAL"],
-        ["reg_hours", "REG"],
-        ["ot_hours", "OT"],
-        ["holiday_hours", "HOL"],
-        ["w2_rate", "W2"],
-        ["stipend_rate", "STIPEND"],
-        ["ot_rate", "OT RATE"],
-        ["holiday_rate", "HOL RATE"],
-        ["guaranteed", "GUAR"],
-        ["standard_w2_amount", "STD W2"],
-        ["ot_amount", "OT AMT"],
-        ["holiday_amount", "HOL AMT"],
-        ["sign_bonus", "BONUS"],
-        ["overall_bonus", "OVERALL"],
-        ["total_pay", "GUSTO PAY"],
-        ["standard_stipend_amount", "STIPEND AMT"],
-        ["total_payable", "TOTAL PAYABLE"],
-        ["total_candidate_expense", "CANDIDATE EXP"],
-        ["client_standard_bill_rate", "CLIENT STD"],
-        ["vms_charges", "VMS"],
-        ["client_standard_amount", "CLIENT STD AMT"],
-        ["client_ot_bill_rate", "CLIENT OT"],
-        ["client_holiday_bill_rate", "CLIENT HOL"],
-        ["client_ot_holiday_amount", "OT/HOL AMT"],
-        ["total_amount_received_from_client", "RECEIVED"],
+        ["total_hours", "TOTAL HOURS"],
+        ["reg_hours", "GUSTO Regular Hours"],
+        ["ot_hours", "OT Hours"],
+        ["holiday_hours", "Holiday pay OT Hours"],
+        ["w2_rate", "GUSTO Regular(W2 Rate)"],
+        ["stipend_rate", "Stipend Rate"],
+        ["ot_rate", "W2 OT Rate"],
+        ["holiday_rate", "Holiday OT Rate"],
+        ["guaranteed", "Guaranteed"],
+        ["standard_w2_amount", "Standard W2 Amount"],
+        ["ot_amount", "OT W2 Amount"],
+        ["holiday_amount", "Holiday OT Amount"],
+        ["sign_bonus", "Sign on Bonus"],
+        ["overall_bonus", "Overall Bonus (GUSTO BONUS)"],
+        ["total_pay", "GUSTO TOTAL PAY"],
+        ["standard_stipend_amount", "Standard Stipend Amount"],
+        ["total_payable", "Total payable"],
+        ["total_candidate_expense", "Total Candidate Cost"],
+        ["client_standard_bill_rate", "Client Standard Bill Rate"],
+        ["vms_charges", "VMS Charges"],
+        ["client_standard_amount", "Client Standard Amount"],
+        ["client_ot_bill_rate", "Client OT Bill Rate"],
+        ["client_holiday_bill_rate", "Client Holiday Bill Rate"],
+        ["client_ot_holiday_amount", "Client OT/Holiday Amount"],
+        ["total_amount_received_from_client", "Total Amount Received from Client"],
         ["net_profit", "NET PROFIT"],
       ];
       const PAYROLL_EDITABLE_FIELDS = new Set([
@@ -118,11 +185,197 @@
         "holiday_rate",
         "sign_bonus",
         "client_standard_bill_rate",
+        "vms_charges",
         "client_ot_bill_rate",
         "client_holiday_bill_rate",
         "total_candidate_expense",
       ]);
+      const PARSED_COLUMN_WIDTHS = {
+        name: 220,
+        start_date: 130,
+        end_date: 130,
+        reg_hours: 120,
+        w2_rate: 120,
+        ot_hours: 120,
+        ot_rate: 120,
+        holiday_rate: 140,
+        holiday_hours: 140,
+      };
       const previewState = new Map();
+
+      function normalizeWeekEndingToIso(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+          return raw;
+        }
+
+        const slashMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (slashMatch) {
+          const mm = slashMatch[1];
+          const dd = slashMatch[2];
+          const yyyy = slashMatch[3];
+          return `${yyyy}-${mm}-${dd}`;
+        }
+
+        return "";
+      }
+
+      function normalizeIsoDate(value) {
+        const raw = String(value || "").trim();
+        return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+      }
+
+      function hydrateParsedRowDates(row) {
+        const sourceWeek = normalizeWeekEndingToIso(row?.week_ending || row?.end_date);
+        const startDate = normalizeIsoDate(row?.start_date) || (sourceWeek ? addDaysIso(sourceWeek, -6) : "");
+        const endDate = normalizeIsoDate(row?.end_date) || sourceWeek;
+        return {
+          ...row,
+          start_date: startDate,
+          end_date: endDate,
+          week_ending: sourceWeek || endDate || "",
+        };
+      }
+
+      function findFirstWeekEndingIso(files) {
+        for (const file of files || []) {
+          for (const row of file?.rows || []) {
+            const iso = normalizeWeekEndingToIso(row?.week_ending);
+            if (iso) return iso;
+          }
+        }
+        return "";
+      }
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(Number(value || 0));
+      }
+
+      function renderNetProfitReport(data) {
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        const periodText =
+          data.period_label ||
+          data.week_ending ||
+          `${data.from_date || ""}${data.to_date ? ` to ${data.to_date}` : ""}`;
+        const tableRows = rows
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(String(row.candidate_name || ""))}</td>
+                <td style="text-align:right;">${formatCurrency(row.net_profit)}</td>
+              </tr>
+            `
+          )
+          .join("");
+
+        weeklyReportResultsEl.innerHTML = `
+          <div class="weekly-report-card">
+            <div class="weekly-report-header">
+              <div><strong>Report:</strong> ${escapeHtml(String(data.report || ""))}</div>
+              <div><strong>Period:</strong> ${escapeHtml(String(periodText || ""))}</div>
+              <div><strong>Candidates:</strong> ${Number(data.candidate_count || 0)}</div>
+              <div><strong>Total Net Profit:</strong> ${formatCurrency(data.total_net_profit)}</div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="weekly-report-table">
+                <thead>
+                  <tr>
+                    <th>Candidate Name</th>
+                    <th style="text-align:right;">Net Profit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    tableRows ||
+                    '<tr><td colspan="2" style="text-align:center;">No candidates found for this week.</td></tr>'
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      function setReportFieldVisibility() {
+        const mode = reportModeSelect.value;
+        document.querySelectorAll("[data-report-field]").forEach((el) => {
+          el.style.display = el.dataset.reportField === mode ? "" : "none";
+        });
+      }
+
+      function buildReportRequest() {
+        const mode = reportModeSelect.value;
+
+        if (mode === "weekly") {
+          const weekEnding = reportWeekEndingInput?.value?.trim() || "";
+          const query = weekEnding
+            ? `?week_ending=${encodeURIComponent(weekEnding)}`
+            : "";
+          return `${API_URL}/timesheets/reports/weekly-net-profit${query}`;
+        }
+
+        if (mode === "monthly") {
+          const month = String(reportMonthInput?.value || "");
+          const year = String(reportYearInput?.value || "");
+          const monthNum = Number(month);
+          const yearNum = Number(year);
+          if (!Number.isInteger(monthNum) || monthNum < 1 || monthNum > 12) {
+            throw new Error("Select a valid month (1-12).");
+          }
+          if (!Number.isInteger(yearNum) || yearNum < 2000 || yearNum > 2100) {
+            throw new Error("Select a valid year (2000-2100).");
+          }
+          return `${API_URL}/timesheets/reports/net-profit?mode=monthly&month=${encodeURIComponent(
+            month
+          )}&year=${encodeURIComponent(year)}`;
+        }
+
+        const fromDate = reportFromDateInput?.value?.trim() || "";
+        const toDate = reportToDateInput?.value?.trim() || "";
+        if (!fromDate || !toDate) {
+          throw new Error("Select both From Date and To Date for custom range.");
+        }
+        if (fromDate > toDate) {
+          throw new Error("From Date cannot be after To Date.");
+        }
+        return `${API_URL}/timesheets/reports/net-profit?mode=range&from_date=${encodeURIComponent(
+          fromDate
+        )}&to_date=${encodeURIComponent(toDate)}`;
+      }
+
+      async function loadNetProfitReport() {
+        loadReportBtn.disabled = true;
+        loadReportBtn.textContent = "Loading...";
+        weeklyReportStatusEl.style.color = "#475569";
+        weeklyReportStatusEl.textContent = "Loading net profit report...";
+
+        try {
+          const url = buildReportRequest();
+          const res = await fetch(url);
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data?.error || "Failed to load weekly report");
+          }
+
+          renderNetProfitReport(data);
+          weeklyReportStatusEl.style.color = "#166534";
+          weeklyReportStatusEl.textContent = "Report loaded.";
+        } catch (error) {
+          weeklyReportResultsEl.innerHTML = "";
+          weeklyReportStatusEl.style.color = "#b91c1c";
+          weeklyReportStatusEl.textContent = error.message;
+        } finally {
+          loadReportBtn.disabled = false;
+          loadReportBtn.textContent = "Run Report";
+        }
+      }
 
       function toCsv(rows) {
         const headers = TABLE_HEADERS.map((h) => h[0]);
@@ -142,7 +395,11 @@
 
       function buildEditableTable(item, index) {
         const safeId = `parsed_table_${index}`;
-        const rows = Array.isArray(item.rows) ? item.rows : [];
+        const rows = (Array.isArray(item.rows) ? item.rows : []).map(hydrateParsedRowDates);
+        const colgroup = TABLE_HEADERS.map(([key]) => {
+          const width = PARSED_COLUMN_WIDTHS[key] || 120;
+          return `<col style="width:${width}px;">`;
+        }).join("");
 
         const tableRows = rows
           .map(
@@ -154,7 +411,7 @@
                     data-key="${key}"
                     type="${type}"
                     value="${escapeHtml(String(key === "w2_rate" ? (row.w2_rate ?? row.reg_rate ?? "") : (row[key] ?? "")))}"
-                    style="width: 100%; min-width: 100px;"
+                    style="width: 100%; min-width: 0;"
                   />
                 </td>
               `).join("")}
@@ -168,7 +425,8 @@
             <h3 style="margin: 0 0 10px;">${escapeHtml(item.filename)}</h3>
             <p style="margin: 0 0 12px; color: #334155;">Pages: ${item.pages ?? "-"} | Rows: ${rows.length}</p>
             <div style="overflow-x:auto;">
-              <table class="payroll-table" id="${safeId}" style="width:100%;">
+              <table class="payroll-table parsed-input-table" id="${safeId}" style="width:100%;">
+                <colgroup>${colgroup}</colgroup>
                 <thead>
                   <tr>${TABLE_HEADERS.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
                 </thead>
@@ -180,6 +438,7 @@
             <div style="display:flex; gap:10px; margin-top:12px;">
               <button type="button" class="btn secondary" data-action="download-csv">Download CSV</button>
               <button type="button" class="btn primary" data-action="preview-payroll">Preview Payroll Table</button>
+              <button type="button" class="btn primary-green" data-action="save-supabase">Save To Supabase</button>
             </div>
             <p data-role="preview-message" style="margin:10px 0 0; color:#475569;"></p>
             <p data-role="missing-message" style="margin:6px 0 0; color:#b45309;"></p>
@@ -202,7 +461,8 @@
               row[key] = input.value.trim();
             }
           });
-          rows.push(row);
+          const hydrated = hydrateParsedRowDates(row);
+          rows.push(hydrated);
         });
         return rows;
       }
@@ -245,9 +505,9 @@
                 const candidates = await candidatesRes.json();
                 const lookup = buildCandidateLookup(candidates || []);
 
-                const missingNames = [];
-                const matchedCandidateIds = new Set();
                 const previewPayload = [];
+                const matchedCandidateIds = new Set();
+                const missingNames = [];
 
                 parsedRows.forEach((row) => {
                   const raw = row.name || "";
@@ -258,15 +518,16 @@
                     return;
                   }
 
-                  matchedCandidateIds.add(match.candidate_uuid);
                   previewPayload.push({
                     id: match.candidate_uuid,
                     reg_hours: Number(row.reg_hours || 0),
                     ot_hours: Number(row.ot_hours || 0),
                     holiday_hours: Number(row.holiday_hours || 0),
-                    w2_rate: Number(row.w2_rate || 0),
-                    ot_rate: Number(row.ot_rate || 0),
+                    client_standard_bill_rate: Number(row.w2_rate || 0),
+                    client_ot_bill_rate: Number(row.ot_rate || 0),
+                    client_holiday_bill_rate: Number(row.holiday_rate || 0),
                   });
+                  matchedCandidateIds.add(match.candidate_uuid);
                 });
 
                 if (!previewPayload.length) {
@@ -274,9 +535,8 @@
                   messageEl.style.color = "#b91c1c";
                   messageEl.textContent = "No parsed rows matched candidate names.";
                   if (missingEl) {
-                    const missingCandidates = (candidates || []).map((c) => c.candidate_name);
-                    missingEl.textContent = missingCandidates.length
-                      ? `Candidates missing from this timesheet: ${missingCandidates.join(", ")}`
+                    missingEl.textContent = missingNames.length
+                      ? `Unmatched parsed names skipped: ${missingNames.join(", ")}`
                       : "";
                   }
                   return;
@@ -292,27 +552,19 @@
                   throw new Error(previewData.error || "Payroll preview failed");
                 }
 
-                previewEl.innerHTML = renderPayrollTable(previewData.rows || []);
-                previewState.set(tableId, previewData.rows || []);
+                const filteredPreviewRows = (previewData.rows || [])
+                  .filter((r) => matchedCandidateIds.has(r.candidate_uuid))
+                  .map(withDerivedFinancials);
+                previewEl.innerHTML = renderPayrollTable(filteredPreviewRows);
+                previewState.set(tableId, filteredPreviewRows);
                 bindPreviewTableEditHandlers(card, tableId);
                 messageEl.style.color = "#166534";
                 messageEl.textContent = "Payroll preview generated.";
 
                 if (missingEl) {
-                  const missingCandidates = (candidates || [])
-                    .filter((c) => !matchedCandidateIds.has(c.candidate_uuid))
-                    .map((c) => c.candidate_name);
-
-                  const parts = [];
-                  if (missingNames.length) {
-                    parts.push(`Unmatched parsed names skipped: ${missingNames.join(", ")}`);
-                  }
-                  if (missingCandidates.length) {
-                    parts.push(
-                      `Candidates missing from this timesheet: ${missingCandidates.join(", ")}`
-                    );
-                  }
-                  missingEl.textContent = parts.join(" | ");
+                  missingEl.textContent = missingNames.length
+                    ? `Unmatched parsed names skipped: ${missingNames.join(", ")}`
+                    : "";
                 }
               } catch (error) {
                 messageEl.style.color = "#b91c1c";
@@ -320,6 +572,57 @@
               } finally {
                 previewBtn.disabled = false;
                 previewBtn.textContent = "Preview Payroll Table";
+              }
+            });
+          }
+
+          const saveBtn = card.querySelector('[data-action="save-supabase"]');
+          if (saveBtn) {
+            saveBtn.addEventListener("click", async () => {
+              const messageEl = card.querySelector('[data-role="preview-message"]');
+              const parsedRows = collectRowsFromTable(tableEl);
+              if (!parsedRows.length) {
+                if (messageEl) {
+                  messageEl.style.color = "#b91c1c";
+                  messageEl.textContent = "No parsed rows to save.";
+                }
+                return;
+              }
+
+              saveBtn.disabled = true;
+              saveBtn.textContent = "Saving...";
+              if (messageEl) {
+                messageEl.style.color = "#475569";
+                messageEl.textContent = "Saving parsed timesheet rows to Supabase...";
+              }
+
+              try {
+                const res = await fetch(`${API_URL}/timesheets/save-parsed`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    rows: parsedRows,
+                    table_name: "parsed_timesheet_rows",
+                  }),
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                  throw new Error(data?.error || "Failed to save parsed rows");
+                }
+
+                if (messageEl) {
+                  messageEl.style.color = "#166534";
+                  messageEl.textContent = `Saved ${data?.inserted_count || parsedRows.length} row(s) to Supabase table ${data?.table || "parsed_timesheet_rows"}.`;
+                }
+              } catch (error) {
+                if (messageEl) {
+                  messageEl.style.color = "#b91c1c";
+                  messageEl.textContent = error.message;
+                }
+              } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = "Save To Supabase";
               }
             });
           }
@@ -345,76 +648,79 @@
 
       function buildCandidateLookup(candidates) {
         const byNormalized = new Map();
-        const byCompact = new Map();
-        const byFirstLast = new Map();
 
         candidates.forEach((candidate) => {
           const key = normalizeName(candidate.candidate_name);
           if (key) {
             byNormalized.set(key, candidate);
-            byCompact.set(key.replaceAll(" ", ""), candidate);
           }
 
           const parts = key.split(" ").filter(Boolean);
           if (parts.length === 2) {
             const reversed = `${parts[1]} ${parts[0]}`;
             byNormalized.set(reversed, candidate);
-            byCompact.set(reversed.replaceAll(" ", ""), candidate);
           }
-
-          const firstLastKey = getFirstLastKey(candidate.candidate_name);
-          if (firstLastKey) byFirstLast.set(firstLastKey, candidate);
         });
-        return { byNormalized, byCompact, byFirstLast };
-      }
-
-      function getFirstLastKey(name) {
-        const raw = String(name || "").trim();
-        if (!raw) return "";
-        if (raw.includes(",")) {
-          const [lastPart, firstPart] = raw.split(",");
-          const last = (lastPart || "").trim().toLowerCase();
-          const first = ((firstPart || "").trim().split(/\s+/)[0] || "").toLowerCase();
-          return first && last ? `${first}|${last}` : "";
-        }
-        const parts = raw.toLowerCase().split(/\s+/).filter(Boolean);
-        if (parts.length < 2) return "";
-        const first = parts[0];
-        const last = parts[parts.length - 1];
-        return `${first}|${last}`;
+        return { byNormalized };
       }
 
       function findCandidateMatch(lookup, parsedName) {
         const k1 = normalizeName(parsedName);
         const k2 = normalizeCommaName(parsedName);
-        const compact1 = k1.replaceAll(" ", "");
-        const compact2 = k2.replaceAll(" ", "");
-        const firstLast = getFirstLastKey(parsedName);
 
         return (
           lookup.byNormalized.get(k1) ||
           lookup.byNormalized.get(k2) ||
-          lookup.byCompact.get(compact1) ||
-          lookup.byCompact.get(compact2) ||
-          lookup.byFirstLast.get(firstLast) ||
           null
         );
       }
 
+      function getPreviewPayrollCellClass(key) {
+        if (key === "candidate_name") return "preview-col-name";
+        if (["reg_hours", "w2_rate"].includes(key)) return "preview-col-blue";
+        if (
+          [
+            "overall_bonus",
+            "total_pay",
+            "standard_stipend_amount",
+            "total_payable",
+          ].includes(key)
+        ) {
+          return "preview-col-blue";
+        }
+        if (key === "total_candidate_expense") return "preview-col-yellow";
+        if (key === "net_profit") return "preview-col-green";
+        return "preview-col-light";
+      }
+
+      function formatPreviewPayrollValue(key, value) {
+        if (key === "total_hours") {
+          const n = Number(value);
+          return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+        }
+        return value ?? "";
+      }
+
       function renderPayrollTable(rows) {
+        const preparedRows = (rows || []).map(withDerivedFinancials);
         return `
-          <div style="overflow-x:auto; margin-top:12px;">
-            <table class="payroll-table" style="width:100%;">
+          <div class="preview-payroll-wrap" style="margin-top:12px;" tabindex="0">
+            <table class="payroll-table preview-payroll-table" style="width:100%;">
               <thead>
-                <tr>${PAYROLL_HEADERS.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
+                <tr>${PAYROLL_HEADERS
+                  .map(([key, label]) => `<th class="${getPreviewPayrollCellClass(key)}">${escapeHtml(label)}</th>`)
+                  .join("")}</tr>
               </thead>
               <tbody>
-                ${rows
+                ${preparedRows
                   .map((row, rowIndex) => `
                       <tr>
                         ${PAYROLL_HEADERS.map(([key]) => {
                           const editable = PAYROLL_EDITABLE_FIELDS.has(key);
-                          return `<td data-row="${rowIndex}" data-key="${key}" ${editable ? 'contenteditable="true" class="editable"' : 'class="readonly"'}>${escapeHtml(String(row[key] ?? ""))}</td>`;
+                          const displayValue = formatPreviewPayrollValue(key, row[key]);
+                          const modeClass = editable ? "editable" : "readonly";
+                          const colorClass = getPreviewPayrollCellClass(key);
+                          return `<td data-row="${rowIndex}" data-key="${key}" class="${modeClass} ${colorClass}" ${editable ? 'contenteditable="true"' : ""}>${escapeHtml(String(displayValue ?? ""))}</td>`;
                         }).join("")}
                       </tr>
                     `)
@@ -431,9 +737,95 @@
         return Number.isNaN(n) ? null : n;
       }
 
+      function addDaysIso(isoDate, days) {
+        const d = new Date(`${isoDate}T00:00:00`);
+        if (Number.isNaN(d.getTime())) return "";
+        d.setDate(d.getDate() + days);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      function buildPayrollPeriodFromParsedRows(rows) {
+        const startDates = (rows || [])
+          .map((r) => normalizeIsoDate(r?.start_date))
+          .filter(Boolean)
+          .sort();
+        const endDates = (rows || [])
+          .map((r) => normalizeIsoDate(r?.end_date) || normalizeWeekEndingToIso(r?.week_ending))
+          .filter(Boolean);
+
+        const today = new Date();
+        const todayIso = `${today.getFullYear()}-${String(
+          today.getMonth() + 1
+        ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+        if (!endDates.length) {
+          return { from_date: todayIso, to_date: todayIso };
+        }
+
+        const toDate = endDates.sort()[endDates.length - 1];
+        const fromDate = startDates[0] || addDaysIso(toDate, -6) || toDate;
+        return { from_date: fromDate, to_date: toDate };
+      }
+
+      function roundTo2(value) {
+        return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+      }
+
+      function withDerivedFinancials(row) {
+        const existingExpense = parseNumberOrNull(row?.total_candidate_expense);
+        const stdW2 = Number(row?.standard_w2_amount || 0);
+        const otAmt = Number(row?.ot_amount || 0);
+        const stipendAmt = Number(row?.standard_stipend_amount || 0);
+        const derivedExpense =
+          existingExpense !== null
+            ? existingExpense
+            : (stdW2 + otAmt) * 1.2 + stipendAmt;
+
+        const existingProfit = parseNumberOrNull(row?.net_profit);
+        const totalReceived = Number(row?.total_amount_received_from_client || 0);
+        const derivedProfit =
+          existingProfit !== null ? existingProfit : totalReceived - derivedExpense;
+
+        return {
+          ...row,
+          total_candidate_expense: roundTo2(derivedExpense),
+          net_profit: roundTo2(derivedProfit),
+        };
+      }
+
+      function bindPreviewScrollHandlers(card) {
+        const previewEl = card.querySelector('[data-role="payroll-preview"]');
+        if (!previewEl) return;
+        const wrap = previewEl.querySelector(".preview-payroll-wrap");
+        if (!wrap || wrap.dataset.scrollBound === "1") return;
+        wrap.dataset.scrollBound = "1";
+
+        wrap.addEventListener(
+          "wheel",
+          (event) => {
+            const canScrollX = wrap.scrollWidth > wrap.clientWidth;
+            if (!canScrollX) return;
+
+            // Convert mouse wheel vertical movement into horizontal table scroll.
+            if (Math.abs(event.deltaY) >= Math.abs(event.deltaX)) {
+              wrap.scrollLeft += event.deltaY;
+              event.preventDefault();
+            } else {
+              wrap.scrollLeft += event.deltaX;
+              event.preventDefault();
+            }
+          },
+          { passive: false }
+        );
+      }
+
       function bindPreviewTableEditHandlers(card, tableId) {
         const previewEl = card.querySelector('[data-role="payroll-preview"]');
         if (!previewEl) return;
+        bindPreviewScrollHandlers(card);
 
         previewEl.querySelectorAll("td[contenteditable='true']").forEach((td) => {
           td.addEventListener("blur", async () => {
@@ -443,6 +835,16 @@
             if (!rows[rowIndex] || !key) return;
 
             rows[rowIndex][key] = parseNumberOrNull(td.textContent.trim()) ?? 0;
+            if (key === "total_candidate_expense") {
+              rows[rowIndex].use_manual_total_candidate_expense = true;
+            }
+
+            const manualExpenseById = new Map(
+              rows.map((r) => [
+                r.candidate_uuid,
+                r.use_manual_total_candidate_expense === true,
+              ])
+            );
 
             const payload = rows.map((r) => ({
               id: r.candidate_uuid,
@@ -457,6 +859,7 @@
               client_standard_bill_rate: parseNumberOrNull(
                 r.client_standard_bill_rate
               ),
+              vms_charges: parseNumberOrNull(r.vms_charges),
               client_ot_bill_rate: parseNumberOrNull(r.client_ot_bill_rate),
               client_holiday_bill_rate: parseNumberOrNull(
                 r.client_holiday_bill_rate
@@ -464,6 +867,8 @@
               total_candidate_expense: parseNumberOrNull(
                 r.total_candidate_expense
               ),
+              use_manual_total_candidate_expense:
+                r.use_manual_total_candidate_expense === true,
             }));
 
             const messageEl = card.querySelector('[data-role="preview-message"]');
@@ -475,8 +880,13 @@
               });
               const data = await res.json();
               if (!res.ok) throw new Error(data.error || "Payroll preview failed");
-              previewState.set(tableId, data.rows || []);
-              previewEl.innerHTML = renderPayrollTable(data.rows || []);
+              const normalizedRows = (data.rows || []).map((row) => ({
+                ...withDerivedFinancials(row),
+                use_manual_total_candidate_expense:
+                  manualExpenseById.get(row.candidate_uuid) === true,
+              }));
+              previewState.set(tableId, normalizedRows);
+              previewEl.innerHTML = renderPayrollTable(normalizedRows);
               bindPreviewTableEditHandlers(card, tableId);
               if (messageEl) {
                 messageEl.style.color = "#166534";
@@ -514,11 +924,15 @@
             method: "POST",
             body: formData,
           });
-
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || "Failed to parse timesheets");
+          const contentType = response.headers.get("content-type") || "";
+          let data = null;
+          if (contentType.includes("application/json")) {
+            data = await response.json();
+          } else {
+            const text = await response.text();
+            throw new Error(`API error (${response.status}): ${text.slice(0, 200)}`);
           }
+          if (!response.ok) throw new Error(data?.error || "Failed to parse timesheets");
 
           const blocks = (data.files || []).map((item, index) => {
             if (item.error) {
@@ -535,12 +949,155 @@
 
           resultsEl.innerHTML = blocks.join("");
           bindParsedTableActions();
+          const parsedWeekIso = findFirstWeekEndingIso(data.files || []);
+          if (parsedWeekIso && reportModeSelect.value === "weekly") {
+            reportWeekEndingInput.value = parsedWeekIso;
+          }
           statusEl.textContent = "Done.";
         } catch (error) {
           console.error(error);
           statusEl.textContent = `Error: ${error.message}`;
         }
       });
+
+      const now = new Date();
+      reportMonthInput.value = String(now.getMonth() + 1);
+      reportYearInput.value = String(now.getFullYear());
+      setReportFieldVisibility();
+      reportModeSelect.addEventListener("change", setReportFieldVisibility);
+      loadReportBtn.addEventListener("click", loadNetProfitReport);
     </script>
+    <style>
+      .parsed-input-table {
+        min-width: 1300px;
+        table-layout: fixed;
+      }
+
+      .parsed-input-table td,
+      .parsed-input-table th {
+        text-align: left !important;
+      }
+
+      .parsed-input-table input[type="text"] {
+        text-align: left;
+      }
+
+      .parsed-input-table input[type="date"] {
+        text-align: left;
+      }
+
+      .parsed-input-table input[type="number"] {
+        text-align: right;
+      }
+
+      .weekly-report-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+      }
+
+      .weekly-report-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #e2e8f0;
+        color: #0f172a;
+        font-size: 14px;
+      }
+
+      .weekly-report-table {
+        width: 100%;
+        min-width: 700px;
+        border-collapse: collapse;
+      }
+
+      .weekly-report-table th,
+      .weekly-report-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eef2f7;
+        white-space: nowrap;
+      }
+
+      .weekly-report-table thead th {
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      .preview-payroll-table td,
+      .preview-payroll-table th {
+        border: 1px solid #e1e6ef;
+        vertical-align: middle;
+      }
+
+      .preview-payroll-wrap {
+        overflow: auto;
+        max-height: 520px;
+        width: 100%;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
+        overscroll-behavior: contain;
+      }
+
+      .preview-payroll-table,
+      .preview-payroll-table thead,
+      .preview-payroll-table tbody,
+      .preview-payroll-table tr,
+      .preview-payroll-table td,
+      .preview-payroll-table th {
+        background: #ffffff;
+      }
+
+      .preview-payroll-table tbody tr:nth-child(even),
+      .preview-payroll-table tbody tr:hover {
+        background: #ffffff !important;
+      }
+
+      .preview-payroll-table thead th {
+        text-align: left !important;
+        white-space: normal !important;
+        line-height: 1.15;
+        font-size: 10px;
+        min-width: 86px;
+      }
+
+      .preview-payroll-table td {
+        text-align: right !important;
+      }
+
+      .preview-payroll-table th.preview-col-name,
+      .preview-payroll-table td.preview-col-name {
+        background: #ffffff !important;
+        font-weight: 600;
+        text-align: left !important;
+      }
+
+      .preview-payroll-table th.preview-col-light,
+      .preview-payroll-table td.preview-col-light {
+        background: #ffffff !important;
+      }
+
+      .preview-payroll-table th.preview-col-blue,
+      .preview-payroll-table td.preview-col-blue {
+        background: #8ea9db !important;
+        color: #0f2a54;
+      }
+
+      .preview-payroll-table th.preview-col-yellow,
+      .preview-payroll-table td.preview-col-yellow {
+        background: #fff200 !important;
+        color: #202020;
+        font-weight: 700;
+      }
+
+      .preview-payroll-table th.preview-col-green,
+      .preview-payroll-table td.preview-col-green {
+        background: #93c47d !important;
+        color: #143611;
+        font-weight: 700;
+      }
+    </style>
   </body>
 </html>

@@ -1,6 +1,10 @@
 {
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
-    "googleapis": "^169.0.0"
+    "busboy": "^1.6.0", 
+    "googleapis": "^169.0.0",
+    "json2csv": "^6.0.0-alpha.2",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.296"
   }
 }

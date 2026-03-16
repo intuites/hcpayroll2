@@ -17,6 +17,8 @@
         <nav class="main-nav">
           <a href="index.html">Add Candidate</a>
           <a href="staffer.html">Payroll</a>
+          <a href="upload.html">Upload</a>
+          <a href="reports.html">Reports</a>
         </nav>
       </div>
     </header>
@@ -59,7 +61,8 @@
     </footer> -->
 
     <script>
-      document.getElementById("year").textContent = new Date().getFullYear();
+      const yearEl = document.getElementById("year");
+      if (yearEl) yearEl.textContent = new Date().getFullYear();
     </script>
     <script type="module" src="app.js"></script>
     <div id="payrollPreview"></div>

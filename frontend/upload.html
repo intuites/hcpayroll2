@@ -118,7 +118,9 @@
       const isLocalHost =
         window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1";
-      const PROD_API_URL = "https://hcpayrollmai.vercel.app/api";
+      const PROD_API_URL = window.location.hostname.endsWith(".vercel.app")
+        ? `${window.location.origin}/api`
+        : "https://hcpayrollreports.vercel.app/api";
       const API_URL = isLocalHost
         ? "http://localhost:5000/api"
         : PROD_API_URL;

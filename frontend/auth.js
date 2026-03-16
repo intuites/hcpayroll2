@@ -11,9 +11,11 @@ function isLocalHost() {
 }
 
 function getApiUrl() {
-  return isLocalHost()
-    ? "http://localhost:5000/api/"
-    : "https://hcpayrollmai.vercel.app/api/";
+  if (isLocalHost()) return "http://localhost:5000/api/";
+  if (window.location.hostname.endsWith(".vercel.app")) {
+    return `${window.location.origin}/api/`;
+  }
+  return "https://hcpayrollreports.vercel.app/api/";
 }
 
 function toLoginEmail(loginId) {

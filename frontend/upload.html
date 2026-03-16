@@ -21,6 +21,7 @@
           <a href="index.html">Add Candidate</a>
           <a href="upload.html" class="active">Upload</a>
           <a href="reports.html">Reports</a>
+          <button type="button" class="nav-logout" id="logoutBtn">Logout</button>
         </nav>
       </div>
     </header>
@@ -106,7 +107,12 @@
       <div class="container">&copy; <span id="year"></span> health Staffing</div>
     </footer>
 
-    <script>
+    <script type="module">
+      import { protectPage, setupLogoutButton } from "./auth.js";
+
+      await protectPage();
+      setupLogoutButton();
+
       document.getElementById("year").textContent = new Date().getFullYear();
 
       const isLocalHost =

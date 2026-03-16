@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Login</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="login.html">health Staffing</a>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card form-card auth-card" aria-labelledby="login-title">
+        <h1 id="login-title">Login</h1>
+        <p id="loginHint" style="margin: 0 0 14px; color: #475569"></p>
+
+        <form id="loginForm" class="grid-form auth-form">
+          <div class="field" style="grid-column: 1 / -1">
+            <label for="loginId">Login ID</label>
+            <input id="loginId" name="loginId" placeholder="Enter login id" required />
+          </div>
+
+          <div class="field" style="grid-column: 1 / -1">
+            <label for="password">Password</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="Enter password"
+              required
+            />
+          </div>
+
+          <div class="form-actions">
+            <button id="loginBtn" type="submit" class="btn primary">Login</button>
+          </div>
+        </form>
+
+        <p id="loginStatus" style="margin-top: 12px; color: #475569"></p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">&copy; <span id="year"></span> health Staffing</div>
+    </footer>
+
+    <script type="module">
+      import {
+        getDefaultLoginId,
+        redirectIfLoggedIn,
+        signIn,
+      } from "./auth.js";
+
+      document.getElementById("year").textContent = new Date().getFullYear();
+
+      const form = document.getElementById("loginForm");
+      const statusEl = document.getElementById("loginStatus");
+      const hintEl = document.getElementById("loginHint");
+      const loginBtn = document.getElementById("loginBtn");
+      const loginIdInput = document.getElementById("loginId");
+      const passwordInput = document.getElementById("password");
+
+      hintEl.textContent = `Default Login ID: ${getDefaultLoginId()} | Default Password: Admin@12345`;
+
+      if (!(await redirectIfLoggedIn())) {
+        loginIdInput.value = getDefaultLoginId();
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        loginBtn.disabled = true;
+        loginBtn.textContent = "Logging in...";
+        statusEl.style.color = "#475569";
+        statusEl.textContent = "Signing in...";
+
+        try {
+          await signIn(loginIdInput.value, passwordInput.value);
+          window.location.href = "index.html";
+        } catch (error) {
+          statusEl.style.color = "#b91c1c";
+          statusEl.textContent = error.message || "Login failed";
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Login";
+        }
+      });
+    </script>
+  </body>
+</html>

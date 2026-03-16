@@ -32,6 +32,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import apiRoot from "./api/index.js";
 import candidatesApi from "./api/candidates.js";
 import payrollApi from "./api/payroll.js";
 import timesheetsApi from "./api/timesheets.js";
@@ -59,6 +60,7 @@ app.get("/", (req, res) => {
   res.send("Healthcare Payroll API is running");
 });
 
+app.use("/api", apiRoot);
 app.use("/api/candidates", candidatesApi);
 app.use("/api/payroll", payrollApi);
 app.use("/api/timesheets", timesheetsApi);

@@ -19,6 +19,7 @@
           <a href="staffer.html">Payroll</a>
           <a href="upload.html">Upload</a>
           <a href="reports.html">Reports</a>
+          <button type="button" class="nav-logout" id="logoutBtn">Logout</button>
         </nav>
       </div>
     </header>
@@ -60,7 +61,12 @@
       <div class="container">© <span id="year"></span> health Staffing</div>
     </footer> -->
 
-    <script>
+    <script type="module">
+      import { protectPage, setupLogoutButton } from "./auth.js";
+
+      await protectPage();
+      setupLogoutButton();
+
       const yearEl = document.getElementById("year");
       if (yearEl) yearEl.textContent = new Date().getFullYear();
     </script>

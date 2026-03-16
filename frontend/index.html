@@ -18,6 +18,7 @@
           <a href="index.html">Add Candidate</a>
           <a href="upload.html">Upload</a>
           <a href="reports.html">Reports</a>
+          <button type="button" class="nav-logout" id="logoutBtn">Logout</button>
         </nav>
       </div>
     </header>
@@ -218,6 +219,11 @@
       document.getElementById("year").textContent = new Date().getFullYear();
     </script>
     <script type="module">
+      import { protectPage, setupLogoutButton } from "./auth.js";
+
+      await protectPage();
+      setupLogoutButton();
+
       const isLocalHost =
         window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1";

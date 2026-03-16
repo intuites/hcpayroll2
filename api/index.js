@@ -7,7 +7,16 @@ function toLoginEmail(loginId) {
   const raw = String(loginId || "").trim().toLowerCase();
   if (!raw) return "";
   if (raw.includes("@")) return raw;
-  return `${raw}@hcpayroll.local`;
+  return `${raw}@hcpayrolladmin.com`;
+}
+
+function isUserAlreadyRegisteredError(error) {
+  return String(error?.message || "").toLowerCase().includes("already registered");
+}
+
+function isAdminPermissionError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("user not allowed") || message.includes("not authorized");
 }
 
 export default async function handler(req, res) {
@@ -37,13 +46,12 @@ export default async function handler(req, res) {
       const email = toLoginEmail(loginId);
 
       const supabase = createClient(url, key);
-      const { data: usersData, error: listError } =
-        await supabase.auth.admin.listUsers({
-          page: 1,
-          perPage: 200,
-        });
+      const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
+        page: 1,
+        perPage: 200,
+      });
 
-      if (listError) {
+      if (listError && !isAdminPermissionError(listError)) {
         return res.status(500).json({ error: listError.message });
       }
 
@@ -51,7 +59,7 @@ export default async function handler(req, res) {
         (user) => String(user.email || "").toLowerCase() === email
       );
 
-      if (!existingUser) {
+      if (!existingUser && !listError) {
         const { error: createError } = await supabase.auth.admin.createUser({
           email,
           password: loginPassword,
@@ -62,14 +70,44 @@ export default async function handler(req, res) {
           },
         });
 
-        if (createError) {
+        if (createError && !isUserAlreadyRegisteredError(createError)) {
           return res.status(500).json({ error: createError.message });
+        }
+      }
+
+      if (!existingUser && isAdminPermissionError(listError)) {
+        const publicKey =
+          process.env.SUPABASE_ANON_KEY ||
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+          process.env.SUPABASE_KEY;
+
+        if (!publicKey) {
+          return res.status(500).json({
+            error: "Missing Supabase anon key for login bootstrap",
+          });
+        }
+
+        const publicSupabase = createClient(url, publicKey);
+        const { error: signUpError } = await publicSupabase.auth.signUp({
+          email,
+          password: loginPassword,
+          options: {
+            data: {
+              login_id: loginId,
+              role: "admin",
+            },
+          },
+        });
+
+        if (signUpError && !isUserAlreadyRegisteredError(signUpError)) {
+          return res.status(500).json({ error: signUpError.message });
         }
       }
 
       return res.status(200).json({
         ok: true,
         default_login_id: loginId,
+        default_login_email: email,
       });
     } catch (error) {
       return res.status(500).json({ error: error.message || "Failed to prepare login" });

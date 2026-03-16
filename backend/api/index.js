@@ -9,7 +9,16 @@ function toLoginEmail(loginId) {
   const raw = String(loginId || "").trim().toLowerCase();
   if (!raw) return "";
   if (raw.includes("@")) return raw;
-  return `${raw}@hcpayroll.local`;
+  return `${raw}@hcpayrolladmin.com`;
+}
+
+function isUserAlreadyRegisteredError(error) {
+  return String(error?.message || "").toLowerCase().includes("already registered");
+}
+
+function isAdminPermissionError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("user not allowed") || message.includes("not authorized");
 }
 
 router.options("/", (_req, res) => res.status(200).end());
@@ -27,13 +36,12 @@ router.post("/", async (req, res) => {
     ).trim();
     const email = toLoginEmail(loginId);
 
-    const { data: usersData, error: listError } =
-      await supabase.auth.admin.listUsers({
-        page: 1,
-        perPage: 200,
-      });
+    const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    });
 
-    if (listError) {
+    if (listError && !isAdminPermissionError(listError)) {
       return res.status(500).json({ error: listError.message });
     }
 
@@ -41,7 +49,7 @@ router.post("/", async (req, res) => {
       (user) => String(user.email || "").toLowerCase() === email
     );
 
-    if (!existingUser) {
+    if (!existingUser && !listError) {
       const { error: createError } = await supabase.auth.admin.createUser({
         email,
         password: loginPassword,
@@ -52,14 +60,32 @@ router.post("/", async (req, res) => {
         },
       });
 
-      if (createError) {
+      if (createError && !isUserAlreadyRegisteredError(createError)) {
         return res.status(500).json({ error: createError.message });
+      }
+    }
+
+    if (!existingUser && isAdminPermissionError(listError)) {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password: loginPassword,
+        options: {
+          data: {
+            login_id: loginId,
+            role: "admin",
+          },
+        },
+      });
+
+      if (signUpError && !isUserAlreadyRegisteredError(signUpError)) {
+        return res.status(500).json({ error: signUpError.message });
       }
     }
 
     return res.status(200).json({
       ok: true,
       default_login_id: loginId,
+      default_login_email: email,
     });
   } catch (error) {
     return res.status(500).json({

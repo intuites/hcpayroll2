@@ -22,7 +22,7 @@ function toLoginEmail(loginId) {
   const raw = String(loginId || "").trim().toLowerCase();
   if (!raw) return "";
   if (raw.includes("@")) return raw;
-  return `${raw}@hcpayroll.local`;
+  return `${raw}@hcpayrolladmin.com`;
 }
 
 export async function ensureDefaultAuthUser() {
@@ -40,18 +40,44 @@ export async function ensureDefaultAuthUser() {
   return data;
 }
 
-export async function signIn(loginId, password) {
-  await ensureDefaultAuthUser();
+function isInvalidCredentialsError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("invalid login credentials") ||
+    message.includes("email not confirmed") ||
+    message.includes("invalid email or password")
+  );
+}
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: toLoginEmail(loginId),
-    password: String(password || ""),
+export async function signIn(loginId, password) {
+  const email = toLoginEmail(loginId);
+  const rawPassword = String(password || "");
+
+  const firstAttempt = await supabase.auth.signInWithPassword({
+    email,
+    password: rawPassword,
   });
 
-  if (error) throw error;
+  if (!firstAttempt.error) {
+    localStorage.setItem(STORAGE_KEY, "1");
+    return firstAttempt.data;
+  }
+
+  if (!isInvalidCredentialsError(firstAttempt.error)) {
+    throw firstAttempt.error;
+  }
+
+  await ensureDefaultAuthUser();
+
+  const secondAttempt = await supabase.auth.signInWithPassword({
+    email,
+    password: rawPassword,
+  });
+
+  if (secondAttempt.error) throw secondAttempt.error;
 
   localStorage.setItem(STORAGE_KEY, "1");
-  return data;
+  return secondAttempt.data;
 }
 
 export async function signOut() {

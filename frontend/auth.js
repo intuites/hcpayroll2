@@ -1,114 +1,63 @@
 import { supabase } from "./supabase.js";
 
 const STORAGE_KEY = "hc_logged_in";
+const USER_STORAGE_KEY = "hc_login_user";
 const DEFAULT_LOGIN_ID = "admin";
 
-function isLocalHost() {
-  return (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-  );
-}
-
-function getApiUrl() {
-  if (isLocalHost()) return "http://localhost:5000/api/";
-  if (window.location.hostname.endsWith(".vercel.app")) {
-    return `${window.location.origin}/api/`;
-  }
-  return "https://hcpayrollreports.vercel.app/api/";
-}
-
-function toLoginEmail(loginId) {
-  const raw = String(loginId || "").trim().toLowerCase();
-  if (!raw) return "";
-  if (raw.includes("@")) return raw;
-  return `${raw}@hcpayrolladmin.com`;
-}
-
-export async function ensureDefaultAuthUser() {
-  const res = await fetch(getApiUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "ensure-default-auth-user" }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.error || "Failed to prepare default login");
-  }
-
-  return data;
-}
-
-function isInvalidCredentialsError(error) {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes("invalid login credentials") ||
-    message.includes("email not confirmed") ||
-    message.includes("invalid email or password")
-  );
-}
-
 export async function signIn(loginId, password) {
-  const email = toLoginEmail(loginId);
+  const rawLogin = String(loginId || "").trim();
   const rawPassword = String(password || "");
-
-  const firstAttempt = await supabase.auth.signInWithPassword({
-    email,
-    password: rawPassword,
-  });
-
-  if (!firstAttempt.error) {
-    localStorage.setItem(STORAGE_KEY, "1");
-    return firstAttempt.data;
+  if (!rawLogin || !rawPassword) {
+    throw new Error("Enter login ID and password");
   }
 
-  if (!isInvalidCredentialsError(firstAttempt.error)) {
-    throw firstAttempt.error;
-  }
-
-  await ensureDefaultAuthUser();
-
-  const secondAttempt = await supabase.auth.signInWithPassword({
-    email,
-    password: rawPassword,
+  const { data, error } = await supabase.rpc("verify_app_login", {
+    p_login: rawLogin,
+    p_password: rawPassword,
   });
 
-  if (secondAttempt.error) throw secondAttempt.error;
+  if (error) {
+    throw new Error(error.message || "Failed to verify login");
+  }
+
+  const user = Array.isArray(data) ? data[0] : null;
+  if (!user || user.is_valid !== true) {
+    throw new Error("Invalid login ID or password");
+  }
 
   localStorage.setItem(STORAGE_KEY, "1");
-  return secondAttempt.data;
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  return user;
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
   window.location.href = "login.html";
 }
 
 export async function protectPage() {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) {
+  const isLoggedIn = localStorage.getItem(STORAGE_KEY) === "1";
+  const rawUser = localStorage.getItem(USER_STORAGE_KEY);
+  if (!isLoggedIn || !rawUser) {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
     window.location.href = "login.html";
     return null;
   }
 
-  const session = data?.session || null;
-  if (!session) {
+  try {
+    return JSON.parse(rawUser);
+  } catch (_error) {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
     window.location.href = "login.html";
     return null;
   }
-
-  localStorage.setItem(STORAGE_KEY, "1");
-  return session;
 }
 
 export async function redirectIfLoggedIn() {
-  const { data } = await supabase.auth.getSession();
-  if (data?.session) {
-    localStorage.setItem(STORAGE_KEY, "1");
+  if (localStorage.getItem(STORAGE_KEY) === "1") {
     window.location.href = "index.html";
     return true;
   }

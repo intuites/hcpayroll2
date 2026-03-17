@@ -13,7 +13,7 @@
   <body>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="login.html">health Staffing</a>
+        <a class="brand" href="login.html">Intuites Healthcare Staffing</a>
       </div>
     </header>
 
@@ -44,12 +44,18 @@
           </div>
         </form>
 
+        <div class="auth-links">
+          <button id="forgotPasswordBtn" type="button" class="link-button">
+            Forgot password?
+          </button>
+        </div>
+
         <p id="loginStatus" style="margin-top: 12px; color: #475569"></p>
       </section>
     </main>
 
     <footer class="site-footer">
-      <div class="container">&copy; <span id="year"></span> health Staffing</div>
+      <div class="container">&copy; <span id="year"></span>Intuites Healthcare Staffing</div>
     </footer>
 
     <script type="module">
@@ -67,8 +73,9 @@
       const loginBtn = document.getElementById("loginBtn");
       const loginIdInput = document.getElementById("loginId");
       const passwordInput = document.getElementById("password");
+      const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
 
-      hintEl.textContent = `Default Login ID: ${getDefaultLoginId()} | Default Password: Admin@12345`;
+      // hintEl.textContent = `Default Login ID: ${getDefaultLoginId()} | Default Password: Admin@12345`;
 
       if (!(await redirectIfLoggedIn())) {
         loginIdInput.value = getDefaultLoginId();
@@ -91,6 +98,14 @@
           loginBtn.disabled = false;
           loginBtn.textContent = "Login";
         }
+      });
+
+      forgotPasswordBtn.addEventListener("click", () => {
+        const rawValue = loginIdInput.value.trim();
+        const email = rawValue.includes("@") ? encodeURIComponent(rawValue) : "";
+        window.location.href = email
+          ? `forgot-password.html?email=${email}`
+          : "forgot-password.html";
       });
     </script>
   </body>

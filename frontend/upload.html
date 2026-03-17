@@ -16,12 +16,11 @@
   <body>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="brand" href="index.html">health - Staffing</a>
+        <a class="brand" href="index.html">Intuites Healthcare Staffing</a>
         <nav class="main-nav">
           <a href="index.html">Add Candidate</a>
           <a href="upload.html" class="active">Upload</a>
           <a href="reports.html">Reports</a>
-          <button type="button" class="nav-logout" id="logoutBtn">Logout</button>
         </nav>
       </div>
     </header>
@@ -104,23 +103,16 @@
     </main>
 
     <footer class="site-footer">
-      <div class="container">&copy; <span id="year"></span> health Staffing</div>
+      <div class="container">&copy; <span id="year"></span> Intuites Healthcare Staffing</div>
     </footer>
 
-    <script type="module">
-      import { protectPage, setupLogoutButton } from "./auth.js";
-
-      await protectPage();
-      setupLogoutButton();
-
+    <script>
       document.getElementById("year").textContent = new Date().getFullYear();
 
       const isLocalHost =
         window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1";
-      const PROD_API_URL = window.location.hostname.endsWith(".vercel.app")
-        ? `${window.location.origin}/api`
-        : "https://hcpayrollreports.vercel.app/api";
+      const PROD_API_URL = "https://hcpayrollmai.vercel.app/api";
       const API_URL = isLocalHost
         ? "http://localhost:5000/api"
         : PROD_API_URL;
@@ -173,7 +165,7 @@
         ["total_pay", "GUSTO TOTAL PAY"],
         ["standard_stipend_amount", "Standard Stipend Amount"],
         ["total_payable", "Total payable"],
-        ["total_candidate_expense", "Total Candidate Cost"],
+        ["total_candidate_expense", "Total Candidate Expense"],
         ["client_standard_bill_rate", "Client Standard Bill Rate"],
         ["vms_charges", "VMS Charges"],
         ["client_standard_amount", "Client Standard Amount"],
@@ -210,6 +202,23 @@
         holiday_hours: 140,
       };
       const previewState = new Map();
+      const parsedSaveState = new Map();
+
+      function buildParsedRowSignature(rows) {
+        return JSON.stringify(
+          (rows || []).map((row) => ({
+            name: String(row?.name || "").trim().toLowerCase(),
+            start_date: String(row?.start_date || "").trim(),
+            end_date: String(row?.end_date || row?.week_ending || "").trim(),
+            reg_hours: Number(row?.reg_hours || 0),
+            ot_hours: Number(row?.ot_hours || 0),
+            holiday_hours: Number(row?.holiday_hours || 0),
+            w2_rate: Number(row?.w2_rate ?? row?.reg_rate ?? 0),
+            ot_rate: Number(row?.ot_rate || 0),
+            holiday_rate: Number(row?.holiday_rate || 0),
+          }))
+        );
+      }
 
       function normalizeWeekEndingToIso(value) {
         const raw = String(value || "").trim();
@@ -589,10 +598,19 @@
             saveBtn.addEventListener("click", async () => {
               const messageEl = card.querySelector('[data-role="preview-message"]');
               const parsedRows = collectRowsFromTable(tableEl);
+              const currentSignature = buildParsedRowSignature(parsedRows);
               if (!parsedRows.length) {
                 if (messageEl) {
                   messageEl.style.color = "#b91c1c";
                   messageEl.textContent = "No parsed rows to save.";
+                }
+                return;
+              }
+
+              if (parsedSaveState.get(tableId) === currentSignature) {
+                if (messageEl) {
+                  messageEl.style.color = "#b45309";
+                  messageEl.textContent = "These parsed rows were already saved to Supabase.";
                 }
                 return;
               }
@@ -620,8 +638,15 @@
                 }
 
                 if (messageEl) {
-                  messageEl.style.color = "#166534";
-                  messageEl.textContent = `Saved ${data?.inserted_count || parsedRows.length} row(s) to Supabase table ${data?.table || "parsed_timesheet_rows"}.`;
+                  if ((data?.inserted_count || 0) > 0) {
+                    parsedSaveState.set(tableId, currentSignature);
+                    messageEl.style.color = "#166534";
+                    messageEl.textContent = `Saved ${data?.inserted_count || parsedRows.length} row(s) to Supabase table ${data?.table || "parsed_timesheet_rows"}.`;
+                  } else {
+                    parsedSaveState.set(tableId, currentSignature);
+                    messageEl.style.color = "#b45309";
+                    messageEl.textContent = "These parsed rows already exist in Supabase.";
+                  }
                 }
               } catch (error) {
                 if (messageEl) {

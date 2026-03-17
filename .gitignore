@@ -10,3 +10,5 @@ backend/google-service-account.json
 
 outputs/
 .vercel/
+
+.vercel

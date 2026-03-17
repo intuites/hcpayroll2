@@ -35,6 +35,7 @@ import { fileURLToPath } from "url";
 import apiRoot from "./api/index.js";
 import candidatesApi from "./api/candidates.js";
 import payrollApi from "./api/payroll.js";
+import passwordResetApi from "./api/password-reset.js";
 import timesheetsApi from "./api/timesheets.js";
 // import payrollGsheetApi from "./api/payrollGsheet.js";
 
@@ -63,6 +64,7 @@ app.get("/", (req, res) => {
 app.use("/api", apiRoot);
 app.use("/api/candidates", candidatesApi);
 app.use("/api/payroll", payrollApi);
+app.use("/api/password-reset", passwordResetApi);
 app.use("/api/timesheets", timesheetsApi);
 // app.use("/api/payroll", payrollGsheetApi);
 

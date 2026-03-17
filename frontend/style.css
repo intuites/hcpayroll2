@@ -881,6 +881,28 @@ main.container {
   grid-template-columns: 1fr;
 }
 
+.auth-links {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.link-button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.link-button:hover {
+  color: var(--accent-600);
+  text-decoration: underline;
+}
+
 .candidates-editor-table th:nth-child(1),
 .candidates-editor-table td:nth-child(1) {
   width: 180px;

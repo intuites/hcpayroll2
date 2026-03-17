@@ -4,6 +4,21 @@ const STORAGE_KEY = "hc_logged_in";
 const USER_STORAGE_KEY = "hc_login_user";
 const DEFAULT_LOGIN_ID = "admin";
 
+function isLocalHost() {
+  return (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+  );
+}
+
+function getApiUrl() {
+  if (isLocalHost()) return "http://localhost:5000/api";
+  if (window.location.hostname.endsWith(".vercel.app")) {
+    return `${window.location.origin}/api`;
+  }
+  return "https://hcpayrollreports.vercel.app/api";
+}
+
 export async function signIn(loginId, password) {
   const rawLogin = String(loginId || "").trim();
   const rawPassword = String(password || "");
@@ -28,6 +43,45 @@ export async function signIn(loginId, password) {
   localStorage.setItem(STORAGE_KEY, "1");
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
   return user;
+}
+
+export async function requestResetEmail(loginOrEmail) {
+  const value = String(loginOrEmail || "").trim();
+  if (!value) {
+    throw new Error("Enter login ID or email");
+  }
+
+  const resetUrl = new URL("./reset-password.html", window.location.href).toString();
+  const response = await fetch(`${getApiUrl()}/password-reset/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      login_or_email: value,
+      redirect_url: resetUrl,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Failed to send reset email");
+  }
+
+  return data;
+}
+
+export async function resetPassword(token, password) {
+  const response = await fetch(`${getApiUrl()}/password-reset/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Failed to reset password");
+  }
+
+  return data;
 }
 
 export async function signOut() {

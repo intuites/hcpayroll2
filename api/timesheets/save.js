@@ -64,6 +64,18 @@ function buildRowKey(name, startDate, endDate) {
   return `${normalizeName(name)}|${startDate}|${endDate}`;
 }
 
+function buildRowFingerprint(row) {
+  return [
+    buildRowKey(row?.candidate_name, row?.start_date, row?.end_date),
+    toNumber(row?.reg_hours),
+    toNumber(row?.ot_hours),
+    toNumber(row?.holiday_hours),
+    toNumber(row?.reg_rate),
+    toNumber(row?.ot_rate),
+    toNumber(row?.holiday_rate),
+  ].join("|");
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
@@ -141,7 +153,9 @@ export default async function handler(req, res) {
     // Skip rows that already exist in DB
     const { data: existingRows, error: existingError } = await supabase
       .from(tableName)
-      .select("candidate_name,start_date,end_date")
+      .select(
+        "candidate_name,start_date,end_date,reg_hours,ot_hours,holiday_hours,reg_rate,ot_rate,holiday_rate"
+      )
       .in("start_date", uniqueStartDates)
       .in("end_date", uniqueEndDates);
 
@@ -149,14 +163,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: existingError.message });
     }
 
-    const existingKeys = new Set(
-      (existingRows || []).map((r) =>
-        buildRowKey(r?.candidate_name, r?.start_date, r?.end_date)
-      )
+    const existingKeys = new Set((existingRows || []).map((r) => buildRowKey(r?.candidate_name, r?.start_date, r?.end_date)));
+    const existingFingerprints = new Set(
+      (existingRows || []).map((r) => buildRowFingerprint(r))
     );
 
     const rowsToInsert = dedupedPayload.filter(
-      (r) => !existingKeys.has(buildRowKey(r.candidate_name, r.start_date, r.end_date))
+      (r) =>
+        !existingKeys.has(buildRowKey(r.candidate_name, r.start_date, r.end_date)) &&
+        !existingFingerprints.has(buildRowFingerprint(r))
     );
 
     if (!rowsToInsert.length) {

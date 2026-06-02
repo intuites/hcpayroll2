@@ -10,8 +10,8 @@ const router = express.Router();
 /* ================= CONFIG ================= */
 const SHEET_ID = process.env.GSHEET_ID;
 const SHEET_NAME = "Payroll";
-const DEFAULT_VMS_RATE = 0.06;
- 
+const DEFAULT_VMS_RATE = 0.065;
+
 if (!SHEET_ID) throw new Error("GSHEET_ID missing");
 
 const KEY_PATH = path.join(process.cwd(), "google-service-account.json");                                           
@@ -40,6 +40,10 @@ const round = (v) =>
   v === null || v === undefined
     ? null
     : Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+const roundVms = (v) =>
+  v === null || v === undefined
+    ? null
+    : Math.round((Number(v) + Number.EPSILON) * 1000) / 1000;
 const isIsoDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
 const pad2 = (v) => String(v).padStart(2, "0");
 
@@ -62,7 +66,7 @@ function calculatePayroll(base, input) {
   let ot_amount = ot * ot_rate;
   let holiday_amount = hol * holiday_rate;
   let standard_stipend_amount = reg * stipend;
- 
+
   /* MISSED PAYMENT */
   const missed_amt = n(input.missed_payment_amount);
   const missed_type = input.missed_payment_type;
@@ -96,7 +100,7 @@ function calculatePayroll(base, input) {
   const client_ot_holiday_amount =
     ot * (client_ot_rate - vms_charges * client_ot_rate) +
     hol * (client_hol_rate - vms_charges * client_hol_rate);
- 
+
   //const vms_charges = 0.06;
   const total_received = client_standard_amount + client_ot_holiday_amount;
   let total_candidate_expense =
@@ -144,7 +148,7 @@ function calculatePayroll(base, input) {
     total_candidate_expense: round(total_candidate_expense),
 
     client_standard_bill_rate: client_std_rate,
-    vms_charges: round(vms_charges),
+    vms_charges: roundVms(vms_charges),
     client_standard_amount: round(client_standard_amount),
 
     client_ot_bill_rate: client_ot_rate,

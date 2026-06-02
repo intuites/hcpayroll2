@@ -156,7 +156,7 @@ function calcNetProfit(base, row) {
     return Number.isNaN(x) ? 0 : x;
   };
   const round = (v) => Math.round((Number(v || 0) + Number.EPSILON) * 100) / 100;
-  const VMS_RATE = 0.06;
+  const VMS_RATE = 0.065;
 
   const reg = n(row?.reg_hours);
   const ot = n(row?.ot_hours);
@@ -726,8 +726,19 @@ router.get("/reports/net-profit", async (req, res) => {
     let fromDate = "";
     let toDate = "";
     let periodLabel = "";
+    let weekEnding = "";
 
-    if (mode === "monthly") {
+    if (mode === "weekly") {
+      weekEnding = String(req.query?.week_ending || "").trim();
+      if (!isIsoDate(weekEnding)) {
+        return res.status(400).json({
+          error: "week_ending is required in YYYY-MM-DD format",
+        });
+      }
+      fromDate = weekEnding;
+      toDate = weekEnding;
+      periodLabel = weekEnding;
+    } else if (mode === "monthly") {
       const month = Number(req.query?.month);
       const year = Number(req.query?.year);
       if (!Number.isInteger(month) || month < 1 || month > 12) {
@@ -759,7 +770,9 @@ router.get("/reports/net-profit", async (req, res) => {
       }
       periodLabel = `${fromDate} to ${toDate}`;
     } else {
-      return res.status(400).json({ error: "mode must be either 'range' or 'monthly'" });
+      return res.status(400).json({
+        error: "mode must be either 'weekly', 'range' or 'monthly'",
+      });
     }
 
     const { data: rows, error } = await supabase
@@ -774,8 +787,14 @@ router.get("/reports/net-profit", async (req, res) => {
     const summary = await buildParsedNetProfitSummary(rows || []);
 
     return res.json({
-      report: mode === "monthly" ? "monthly_net_profit" : "period_net_profit",
+      report:
+        mode === "weekly"
+          ? "weekly_net_profit"
+          : mode === "monthly"
+            ? "monthly_net_profit"
+            : "period_net_profit",
       mode,
+      ...(mode === "weekly" ? { week_ending: weekEnding } : {}),
       from_date: fromDate,
       to_date: toDate,
       period_label: periodLabel,
